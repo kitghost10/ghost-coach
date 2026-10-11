@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ghost Coach</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark"
+            ><svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path
+                d="M7 25V14a9 9 0 0 1 18 0v11l-4-3-5 3-5-3-4 3Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M12 14v3m8-3v3"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              /></svg></span
+          ><strong>Ghost Coach<small>Your quiet advantage</small></strong>
+        </div>
+        <p class="nav-label">WORKSPACE</p>
+        <nav class="nav" aria-label="Main navigation">
+          <button id="nav-sessions" class="nav-item active" type="button">
+            <span aria-hidden="true">＋</span> New call
+          </button>
+          <button id="nav-history" class="nav-item" type="button">
+            <span aria-hidden="true">▤</span> Call library
+          </button>
+          <button id="nav-settings" class="nav-item" type="button">
+            <span aria-hidden="true">⚙</span> Setup
+          </button>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="mini-ghost"
+            ><svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+              <path
+                d="M7 25V14a9 9 0 0 1 18 0v11l-4-3-5 3-5-3-4 3Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M12 14v3m8-3v3"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              /></svg
+          ></span>
+          <p>A little help.<br />A better conversation.</p>
+          <small>Recordings saved on this computer</small>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <div class="breadcrumb">
+            Workspace <span>/</span>
+            <h1 id="page-title">New call</h1>
+          </div>
+          <p id="status" class="status-chip" role="status" aria-live="polite">
+            Ready
+          </p>
+        </header>
+        <main class="main">
+          <section id="view-sessions" class="view">
+            <div class="page-copy">
+              <span id="session-eyebrow" class="eyebrow"
+                >YOUR NEXT CONVERSATION</span
+              >
+              <h2 id="session-heading">Go into your call prepared.</h2>
+              <p id="session-description" class="lede">
+                A little context is all your coach needs. You lead the
+                conversation.
+              </p>
+            </div>
+            <div id="saved-banner" class="saved-banner hidden" role="status">
+              <div>
+                <strong>Call saved.</strong
+                ><span
+                  >Your recording, transcript, and suggestions are ready.</span
+                >
+              </div>
+              <button id="review-latest" class="btn" type="button">
+                Review call →
+              </button>
+            </div>
+            <div id="prepare-panel" class="prepare-grid">
+              <article class="card briefing">
+                <div class="section-heading">
+                  <div>
+                    <span class="eyebrow">01 · PREPARE</span>
+                    <h3>Who are you calling?</h3>
+                  </div>
+                  <button id="clear-brief" class="text-button" type="button">
+                    Clear brief
+                  </button>
+                </div>
+                <p class="help">
+                  Optional, but a brief makes the advice more relevant.
+                </p>
+                <div class="fields">
+                  <label class="field"
+                    ><span>Business or prospect</span
+                    ><input
+                      id="prospect-name"
+                      placeholder="e.g. Riverside Plumbing"
+                      autocomplete="organization"
+                  /></label>
+                  <label class="field"
+                    ><span>What is your goal?</span
+                    ><select id="call-objective">
+                      <option>Book a strategy call</option>
+                      <option>Sell a website rebuild</option>
+                      <option>Sell CRO improvements</option>
+                      <option>Sell Google lead generation</option>
+                      <option>Sell an AI receptionist</option>
+                      <option>Qualify the opportunity</option>
+                    </select></label
+                  >
+                  <label class="field full"
+                    ><span>What should your coach know?</span
+                    ><textarea
+                      id="prospect-notes"
+                      rows="3"
+                      placeholder="Their challenge, what you offer, or anything you want to ask…"
+                    ></textarea>
+                  </label>
+                </div>
+                <details class="extra-context">
+                  <summary>Add website and location <span>＋</span></summary>
+                  <div class="fields">
+                    <label class="field"
+                      ><span>Website</span
+                      ><input
+                        id="prospect-site"
+                        placeholder="https://…" /></label
+                    ><label class="field"
+                      ><span>Location / service area</span
+                      ><input id="prospect-area" placeholder="City or region"
+                    /></label>
+                  </div>
+                </details>
+              </article>
+              <article class="card launch">
+                <span class="eyebrow">02 · GET READY</span>
+                <h3 id="launch-title">Before you begin</h3>
+                <p id="launch-sub" class="help">
+                  Open your calling app and put on your headset.
+                </p>
+                <div class="readiness">
+                  <button
+                    id="check-captions"
+                    type="button"
+                    class="readiness-row"
+                  >
+                    <span class="readiness-icon" id="captions-dot">○</span
+                    ><span
+                      ><b>Live captions</b
+                      ><small id="captions-ready"
+                        >Add a captions key</small
+                      ></span
+                    ><span class="row-arrow">↗</span>
+                  </button>
+                  <button id="check-coach" type="button" class="readiness-row">
+                    <span class="readiness-icon" id="coach-dot">○</span
+                    ><span
+                      ><b>Reply suggestions</b
+                      ><small id="coach-ready"
+                        >Add a coach key · optional</small
+                      ></span
+                    ><span class="row-arrow">↗</span>
+                  </button>
+                  <button id="check-audio" type="button" class="readiness-row">
+                    <span class="readiness-icon" id="audio-dot">○</span
+                    ><span
+                      ><b>Microphone & call audio</b
+                      ><small id="audio-ready"
+                        >Check your audio sources</small
+                      ></span
+                    ><span class="row-arrow">↗</span>
+                  </button>
+                </div>
+                <button
+                  id="start-call"
+                  class="btn btn-primary btn-lg"
+                  type="button"
+                >
+                  Start coaching <span>→</span>
+                </button>
+                <p class="launch-note">
+                  Then make your call as usual.<br />Ghost Coach listens and
+                  suggests. You speak.
+                </p>
+              </article>
+            </div>
+            <div id="live-panel" class="hidden">
+              <div class="live-toolbar">
+                <span class="live-pill">● Coaching is active</span
+                ><span id="live-prospect"></span>
+                <div class="live-actions">
+                  <button id="show-overlay" class="btn" type="button">
+                    Show floating coach</button
+                  ><button id="stop-call" class="btn btn-danger" type="button">
+                    End & save call
+                  </button>
+                </div>
+              </div>
+              <div class="live-grid">
+                <article class="card live-conversation">
+                  <div class="section-heading">
+                    <h3>Conversation</h3>
+                    <span class="badge">Live captions</span>
+                  </div>
+                  <div
+                    id="live-feed"
+                    class="live-feed"
+                    role="log"
+                    aria-label="Live conversation"
+                  >
+                    <p class="help">
+                      Captions appear as you and the prospect speak.
+                    </p>
+                  </div>
+                </article>
+                <article class="card live-suggestion">
+                  <span class="eyebrow">YOUR NEXT LINE</span>
+                  <div class="suggestion-meta">
+                    <span id="live-intent" class="badge">Listening</span
+                    ><span id="live-coach-state">Waiting for the prospect</span>
+                  </div>
+                  <p id="live-answer">
+                    Your coach will suggest a line after the prospect speaks.
+                  </p>
+                  <p id="live-goal" class="help">
+                    Listen first. Keep the conversation natural.
+                  </p>
+                  <button id="live-generate" class="btn" type="button">
+                    Suggest a reply
+                  </button>
+                </article>
+              </div>
+            </div>
+            <details id="call-tools" class="call-tools">
+              <summary>
+                <div>
+                  <b>Call notes & objection help</b
+                  ><small>Optional tools for qualifying the opportunity</small>
+                </div>
+                <span>＋</span>
+              </summary>
+              <div class="overview-grid">
+                <details class="card optional-panel">
+                  <summary>
+                    <span
+                      ><b>Opportunity snapshot</b
+                      ><small>Qualification notes and deal details</small></span
+                    ><strong id="opportunity-score" class="opportunity-score"
+                      >0/8</strong
+                    >
+                  </summary>
+                  <div class="optional-body">
+                    <p class="help">Mark what you confirm during the call.</p>
+                    <div class="check compact-check">
+                      <label
+                        ><input class="pain-check" type="checkbox" /> They lose
+                        or miss calls</label
+                      ><label
+                        ><input class="pain-check" type="checkbox" /> Website
+                        does not convert well</label
+                      ><label
+                        ><input class="pain-check" type="checkbox" /> Google
+                        leads are inconsistent</label
+                      ><label
+                        ><input class="pain-check" type="checkbox" />
+                        After-hours coverage is weak</label
+                      ><label
+                        ><input class="pain-check" type="checkbox" /> One booked
+                        job is valuable</label
+                      >
+                    </div>
+                    <label class="field"
+                      ><span>Deal stage</span
+                      ><select id="deal-stage">
+                        <option>New prospect</option>
+                        <option>Qualified</option>
+                        <option>Proposal needed</option>
+                        <option>Follow-up due</option>
+                        <option>Won</option>
+                        <option>Lost</option>
+                      </select></label
+                    >
+                    <div class="field full">
+                      <span>Qualification details</span>
+                      <div class="fields compact-fields">
+                        <label class="field"
+                          ><span>Problem severity</span
+                          ><select id="problem-severity">
+                            <option>Unknown</option>
+                            <option>Low</option>
+                            <option>Medium</option>
+                            <option>High</option>
+                          </select></label
+                        ><label class="field"
+                          ><span>Monthly leads</span
+                          ><input
+                            id="monthly-leads"
+                            placeholder="e.g. 40" /></label
+                        ><label class="field"
+                          ><span>Budget / investment</span
+                          ><input id="budget" placeholder="Unknown" /></label
+                        ><label class="field"
+                          ><span>Decision timing</span
+                          ><select id="decision-timing">
+                            <option>Unknown</option>
+                            <option>This month</option>
+                            <option>Next 90 days</option>
+                            <option>Later</option>
+                          </select></label
+                        >
+                      </div>
+                    </div>
+                    <p id="qualification-note" class="help">
+                      Qualification improves as you confirm impact, authority,
+                      budget, and timing.
+                    </p>
+                  </div>
+                </details>
+                <details class="card optional-panel">
+                  <summary>
+                    <span
+                      ><b>Objection coach</b
+                      ><small
+                        >Open a prompt when a conversation stalls</small
+                      ></span
+                    ><span class="summary-arrow" aria-hidden="true">⌄</span>
+                  </summary>
+                  <div class="optional-body">
+                    <p class="help">
+                      Choose the response angle that fits the moment.
+                    </p>
+                    <div class="objections">
+                      <button
+                        class="objection"
+                        type="button"
+                        data-objection="We already have a website."
+                      >
+                        “We already have a website.”</button
+                      ><button
+                        class="objection"
+                        type="button"
+                        data-objection="We get most work from referrals."
+                      >
+                        “Most of our work comes from referrals.”</button
+                      ><button
+                        class="objection"
+                        type="button"
+                        data-objection="I need to think about it."
+                      >
+                        “I need to think about it.”</button
+                      ><button
+                        class="objection"
+                        type="button"
+                        data-objection="That is too expensive."
+                      >
+                        “That is too expensive.”</button
+                      ><button
+                        class="objection"
+                        type="button"
+                        data-objection="Send me some information."
+                      >
+                        “Send me some information.”</button
+                      ><button
+                        class="objection"
+                        type="button"
+                        data-objection="I need to talk to my partner."
+                      >
+                        “I need to talk to my partner.”
+                      </button>
+                    </div>
+                    <p id="objection-response" class="objection-response">
+                      Choose an objection to get a response angle.
+                    </p>
+                  </div>
+                </details>
+              </div>
+            </details>
+            <div id="recent-section">
+              <div class="section-heading recent-heading">
+                <div>
+                  <h3>Pick up where you left off</h3>
+                  <p class="help">
+                    Your last few conversations, ready to review.
+                  </p>
+                </div>
+                <button id="see-all-calls" class="text-button" type="button">
+                  View call library →
+                </button>
+              </div>
+              <div id="recent-wrap" class="table-wrap hidden">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Conversation</th>
+                      <th>When</th>
+                      <th>Duration</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="recent-rows"></tbody>
+                </table>
+              </div>
+              <div id="recent-empty" class="empty-state compact-empty">
+                <span class="empty-symbol"
+                  ><svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                    <path
+                      d="M7 25V14a9 9 0 0 1 18 0v11l-4-3-5 3-5-3-4 3Z"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M12 14v3m8-3v3"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                    /></svg
+                ></span>
+                <div>
+                  <h3>Your first call starts here.</h3>
+                  <p>
+                    After a session, find its recording and notes in your call
+                    library.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section id="view-history" class="view hidden">
+            <div class="page-copy">
+              <span class="eyebrow">REVIEW & FOLLOW UP</span>
+              <h2>Your call library.</h2>
+              <p class="lede">
+                Revisit the conversation. Decide what comes next.
+              </p>
+            </div>
+            <div class="toolbar">
+              <input
+                id="history-search"
+                class="search grow"
+                type="search"
+                aria-label="Search call library"
+                placeholder="Search by date or conversation preview…"
+              /><button id="open-folder" class="btn" type="button">
+                Open recordings folder
+              </button>
+            </div>
+            <div id="history-wrap" class="table-wrap hidden">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Conversation</th>
+                    <th>When</th>
+                    <th>Duration</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="history-rows"></tbody>
+              </table>
+            </div>
+            <div id="history-empty" class="empty-state">
+              <span class="empty-symbol"
+                ><svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                  <path
+                    d="M7 25V14a9 9 0 0 1 18 0v11l-4-3-5 3-5-3-4 3Z"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M12 14v3m8-3v3"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                  /></svg
+              ></span>
+              <h3>A space for your conversations.</h3>
+              <p>
+                End a coaching session to save its audio, transcript, and
+                suggestions here.
+              </p>
+              <button
+                id="history-new-call"
+                class="btn btn-primary"
+                type="button"
+              >
+                Prepare a call →
+              </button>
+            </div>
+          </section>
+          <section id="view-transcript" class="view hidden">
+            <button id="back" class="text-button" type="button">
+              ← Back to calls
+            </button>
+            <div class="page-copy review-heading">
+              <span class="eyebrow">CALL REVIEW</span>
+              <h2 id="transcript-title">Your conversation</h2>
+              <p id="transcript-sub" class="lede"></p>
+            </div>
+            <div class="toolbar review-actions">
+              <button id="play-audio" class="btn btn-primary" type="button">
+                Listen to recording</button
+              ><button id="copy-transcript" class="btn" type="button">
+                Copy transcript</button
+              ><button id="make-followup" class="btn" type="button">
+                Draft follow-up
+              </button>
+              <details class="more-actions">
+                <summary>More</summary>
+                <button id="copy-id" class="text-button" type="button">
+                  Copy session ID
+                </button>
+                <p id="session-id" class="session-id"></p>
+              </details>
+            </div>
+            <div id="followup-wrap" class="card followup hidden">
+              <div class="section-heading">
+                <h3>Follow-up draft</h3>
+                <span class="badge">Review before sending</span>
+              </div>
+              <textarea
+                id="followup-text"
+                aria-label="Follow-up draft"
+                rows="9"
+              ></textarea>
+              <div class="toolbar">
+                <button id="copy-followup" class="btn" type="button">
+                  Copy draft
+                </button>
+              </div>
+            </div>
+            <div id="transcript-body" class="transcript"></div>
+          </section>
+          <section id="view-settings" class="view hidden">
+            <div class="page-copy">
+              <span class="eyebrow">MAKE IT YOURS</span>
+              <h2>Set up your coach.</h2>
+              <p class="lede">Connect once. Adjust whenever you need.</p>
+            </div>
+            <div class="setup-layout">
+              <nav class="setup-nav" aria-label="Setup sections">
+                <button
+                  class="setup-tab active"
+                  data-setup="connections"
+                  type="button"
+                >
+                  Connections<small>Captions & AI coach</small></button
+                ><button class="setup-tab" data-setup="audio" type="button">
+                  Audio check<small>Microphone & call sound</small></button
+                ><button
+                  class="setup-tab"
+                  data-setup="appearance"
+                  type="button"
+                >
+                  Floating coach<small>Appearance & placement</small></button
+                ><button
+                  class="setup-tab"
+                  data-setup="preferences"
+                  type="button"
+                >
+                  Coaching preferences<small
+                    >Automatic or on demand</small
+                  ></button
+                ><button class="setup-tab" data-setup="storage" type="button">
+                  Saved data<small>Recordings & transcripts</small>
+                </button>
+              </nav>
+              <div class="settings-stack">
+                <article id="setup-connections" class="card setup-panel">
+                  <h3>Connect your coach</h3>
+                  <p class="help">
+                    Deepgram creates captions. Your chosen AI provider suggests
+                    replies. A coach key is optional.
+                  </p>
+                  <div class="fields">
+                    <label class="field">
+                      <span>Provider</span>
+                      <select id="ai-provider">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="openrouter">OpenRouter</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Model</span>
+                      <select id="coach-model"></select>
+                    </label>
+                    <label class="field">
+                      <span>Captions key (Deepgram)</span>
+                      <input id="dg-key" type="password" autocomplete="off" />
+                    </label>
+                    <label class="field">
+                      <span id="coach-key-label">Google Gemini API key</span>
+                      <input
+                        id="coach-key"
+                        type="password"
+                        autocomplete="off"
+                        placeholder="Paste your Google Gemini API key"
+                      />
+                    </label>
+                  </div>
+                  <p id="ai-status" class="badge" style="margin-top: 16px">
+                    Needs attention
+                  </p>
+                  <input
+                    id="google-key"
+                    type="password"
+                    class="hidden"
+                    autocomplete="off"
+                  />
+                  <input id="google-model" class="hidden" autocomplete="off" />
+                  <input
+                    id="oai-key"
+                    type="password"
+                    class="hidden"
+                    autocomplete="off"
+                  />
+                  <input id="oai-model" class="hidden" autocomplete="off" />
+                  <input
+                    id="openrouter-key"
+                    type="password"
+                    class="hidden"
+                    autocomplete="off"
+                  />
+                  <input
+                    id="openrouter-model"
+                    class="hidden"
+                    autocomplete="off"
+                  />
+                </article>
+                <article id="setup-audio" class="card setup-panel hidden">
+                  <h3>Check your audio</h3>
+                  <p class="help">
+                    Your microphone is you. System audio is the prospect. Levels
+                    update live.
+                  </p>
+                  <div class="fields">
+                    <label class="field">
+                      <span>Microphone</span>
+                      <input value="System default microphone" disabled />
+                    </label>
+                    <label class="field">
+                      <span>System audio</span>
+                      <input
+                        value="System default output (loopback)"
+                        disabled
+                      />
+                    </label>
+                  </div>
+                  <div class="meters">
+                    <div class="meter" id="you-meter">
+                      <div class="meter-head">
+                        <span>Microphone</span><span id="you-level">Quiet</span>
+                      </div>
+                      <canvas id="you-wave" height="36"></canvas>
+                    </div>
+                    <div class="meter" id="them-meter">
+                      <div class="meter-head">
+                        <span>System audio</span
+                        ><span id="them-level">Quiet</span>
+                      </div>
+                      <canvas id="them-wave" height="36"></canvas>
+                    </div>
+                  </div>
+                  <div class="toolbar" style="margin: 0">
+                    <button id="test-mic" class="btn" type="button">
+                      Test microphone
+                    </button>
+                    <button id="test-sys" class="btn" type="button">
+                      Test system audio
+                    </button>
+                  </div>
+                  <p id="audio-hint" class="help" style="margin: 12px 0 0"></p>
+                </article>
+                <article id="setup-appearance" class="card setup-panel hidden">
+                  <h3>Your floating coach</h3>
+                  <p class="help">
+                    How captions and the next line look on top of your call.
+                    Changes apply immediately if the overlay is open.
+                  </p>
+                  <div class="fields">
+                    <label class="field">
+                      <span>Theme</span>
+                      <select id="ov-theme">
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Show</span>
+                      <select id="ov-layout">
+                        <option value="both">Conversation and next line</option>
+                        <option value="captions">Conversation only</option>
+                        <option value="suggest">Next line only</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Size</span>
+                      <select id="ov-size">
+                        <option value="compact">Compact</option>
+                        <option value="comfortable" selected>
+                          Comfortable
+                        </option>
+                        <option value="large">Large</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Position</span>
+                      <select id="ov-position">
+                        <option value="top">Top of screen</option>
+                        <option value="bottom">Bottom of screen</option>
+                      </select>
+                    </label>
+                    <label class="field full">
+                      <span>Text size <b id="ov-font-label">100%</b></span>
+                      <input
+                        id="ov-font"
+                        type="range"
+                        min="85"
+                        max="150"
+                        step="5"
+                        value="100"
+                      />
+                    </label>
+                    <label class="field full">
+                      <span>Background <b id="ov-opacity-label">88%</b></span>
+                      <input
+                        id="ov-opacity"
+                        type="range"
+                        min="50"
+                        max="96"
+                        step="2"
+                        value="88"
+                      />
+                    </label>
+                  </div>
+                  <div class="toolbar" style="margin: 16px 0 0">
+                    <button id="preview-overlay" class="btn" type="button">
+                      Preview overlay
+                    </button>
+                  </div>
+                </article>
+                <article id="setup-preferences" class="card setup-panel hidden">
+                  <h3>How should your coach help?</h3>
+                  <p class="help">
+                    Applied every time you start a call session.
+                  </p>
+                  <label class="check">
+                    <input id="auto-answer" type="checkbox" checked />
+                    <span>
+                      Generate suggested replies automatically
+                      <small
+                        >On by default. Uncheck only if you want to press
+                        Suggest reply yourself.</small
+                      >
+                    </span>
+                  </label>
+                  <label class="check">
+                    <input id="click-through" type="checkbox" />
+                    <span>
+                      Click through the overlay
+                      <small
+                        >Clicks pass to the call app underneath. Turn off to use
+                        the overlay buttons.</small
+                      >
+                    </span>
+                  </label>
+                </article>
+                <article id="setup-storage" class="card setup-panel hidden">
+                  <h3>Your saved conversations</h3>
+                  <p class="help">
+                    Transcripts, AI suggestions, and audio stay in a folder on
+                    this computer. Live audio goes to Deepgram for captions.
+                    Conversation text and your brief go to your selected AI
+                    provider for suggestions.
+                  </p>
+                  <button id="open-folder-2" class="btn" type="button">
+                    Open local session folder
+                  </button>
+                </article>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

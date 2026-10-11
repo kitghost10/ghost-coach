@@ -1,0 +1,43 @@
+[package]
+name = "sonic-sales"
+version = "0.1.0"
+description = "Live sales overlay coach"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "sonic_sales_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+tungstenite = "0.26"
+cpal = "0.15"
+http = "1"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+wasapi = "0.19"
+
+[features]
+# Production builds serve the bundled frontend. `tauri dev` turns this off
+# and uses the Vite server instead.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

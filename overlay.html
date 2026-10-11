@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/overlay.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ghost Coach Overlay</title>
+    <script type="module" src="/src/overlay.ts" defer></script>
+  </head>
+  <body>
+    <div class="panel" id="panel">
+      <header class="head" data-tauri-drag-region>
+        <span class="ghost-mark" aria-hidden="true"
+          ><svg viewBox="0 0 32 32" fill="none">
+            <path
+              d="M7 25V14a9 9 0 0 1 18 0v11l-4-3-5 3-5-3-4 3Z"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M12 14v3m8-3v3"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            /></svg
+        ></span>
+        <strong data-tauri-drag-region>Ghost Coach</strong>
+        <span id="live-badge" class="live-badge off">READY</span>
+        <span id="timer">00:00</span>
+        <span id="coach-state" class="coach-state" data-state="idle">
+          <i class="dot" aria-hidden="true"></i>
+          <span id="coach-state-text">Idle</span>
+        </span>
+        <span id="health" class="health">Audio quiet</span>
+        <label class="auto">
+          <input id="auto-answer" type="checkbox" checked />
+          Auto replies
+        </label>
+        <button
+          id="collapse"
+          type="button"
+          title="Hide the coach; keep recording"
+        >
+          Hide
+        </button>
+        <button
+          id="close"
+          type="button"
+          title="End coaching and save this call"
+        >
+          End &amp; save
+        </button>
+      </header>
+
+      <div class="columns">
+        <section class="col talk">
+          <p class="kicker">Live conversation</p>
+          <div id="feed" class="feed">
+            <p id="idle" class="idle">Lines appear here as you both talk.</p>
+          </div>
+        </section>
+
+        <div class="split" data-tauri-drag-region></div>
+
+        <section class="col suggest">
+          <div class="suggest-head">
+            <p class="kicker">Your next line</p>
+            <span id="intent-badge" class="intent-badge">Listening</span>
+            <button id="generate" type="button">Suggest reply</button>
+          </div>
+          <div class="suggest-scroll">
+            <p id="trigger" class="trigger hidden">
+              <span id="trigger-text"></span>
+            </p>
+            <p id="answer" class="placeholder">
+              Your next line appears here as soon as they finish talking.
+            </p>
+            <p id="goal" class="goal">
+              Goal: understand the prospect’s current situation.
+            </p>
+            <p id="need" class="need"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>
