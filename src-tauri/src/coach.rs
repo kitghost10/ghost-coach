@@ -53,16 +53,10 @@ impl CoachSettings {
         }
     }
 
-    fn openrouter_model(&self) -> String {
+    fn openrouter_model(&self) -> Result<String> {
         let model = self.openrouter_model.trim();
-        if model.is_empty()
-            || model.eq_ignore_ascii_case("gpt-6-luna")
-            || model.eq_ignore_ascii_case("gpt6-luna")
-        {
-            "openai/gpt-6-luna".into()
-        } else {
-            model.to_string()
-        }
+        if model.is_empty() { bail!("Enter an OpenRouter model ID in Connections."); }
+        Ok(model.to_string())
     }
 
     fn gemini_models(&self) -> Vec<String> {
@@ -167,7 +161,7 @@ async fn suggest_openrouter(
     prospect: &str,
     history: &[String], brief: &str,
 ) -> Result<CoachReply> {
-    let model = settings.openrouter_model();
+    let model = settings.openrouter_model()?;
     let mut body = json!({
         "model": model,
         "temperature": 0.2,
@@ -297,4 +291,21 @@ fn parse_reply(raw: &str, prospect: &str) -> Result<CoachReply> {
             .to_string(),
         tag,
     })
+}
+
+#[cfg(test)]
+mod model_tests {
+    use super::CoachSettings;
+    fn settings(model: &str) -> CoachSettings {
+        CoachSettings { provider: "openrouter".into(), google_api_key: String::new(), google_model: String::new(), openai_key: String::new(), openai_model: String::new(), openrouter_key: "example-key".into(), openrouter_model: model.into() }
+    }
+    #[test]
+    fn manual_model_ids_are_not_replaced_by_presets() {
+        assert_eq!(settings(" vendor/custom-model:free ").openrouter_model().unwrap(), "vendor/custom-model:free");
+        assert_eq!(settings("gpt-6-luna").openrouter_model().unwrap(), "gpt-6-luna");
+    }
+    #[test]
+    fn blank_model_requires_user_input() {
+        assert!(settings(" ").openrouter_model().is_err());
+    }
 }

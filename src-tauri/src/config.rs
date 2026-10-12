@@ -19,7 +19,7 @@ fn default_openai_model() -> String {
 }
 
 fn default_openrouter_model() -> String {
-    "openai/gpt-6-luna".into()
+    String::new()
 }
 
 fn default_overlay_theme() -> String {
@@ -182,6 +182,7 @@ mod tests {
             "deepgram_key":"example-captions-key",
             "openrouter_key":"example-coach-key",
             "ai_provider":"openrouter",
+            "openrouter_model":"vendor/saved-model",
             "click_through":true,
             "overlay":{"theme":"dark","font_scale":1.25,"layout":"suggest","size":"large","position":"bottom","opacity":0.5}
         }"#;
@@ -189,6 +190,7 @@ mod tests {
         assert_eq!(cfg.deepgram_key, "example-captions-key");
         assert_eq!(cfg.openrouter_key, "example-coach-key");
         assert_eq!(cfg.ai_provider, "openrouter");
+        assert_eq!(cfg.openrouter_model, "vendor/saved-model");
         assert_eq!(cfg.overlay.theme, "dark");
         assert_eq!(cfg.overlay.font_scale, 1.25);
         let saved = serde_json::to_value(cfg).unwrap();
@@ -197,6 +199,12 @@ mod tests {
             saved["overlay"],
             serde_json::json!({"theme":"dark","font_scale":1.25})
         );
+    }
+
+    #[test]
+    fn new_connections_have_no_preselected_openrouter_model() {
+        let cfg: SavedConfig = serde_json::from_str("{}").unwrap();
+        assert!(cfg.openrouter_model.is_empty());
     }
 
     #[test]

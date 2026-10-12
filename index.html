@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ghost Coach</title>
+    <link rel="icon" type="image/png" href="/ghost-coach-icon.png" />
     <link rel="stylesheet" href="/src/styles.css" />
     <script type="module" src="/src/main.ts" defer></script>
   </head>
@@ -12,19 +13,11 @@
       <aside class="sidebar">
         <div class="brand">
           <span class="brand-mark"
-            ><svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-              <path
-                d="M7 25V14a9 9 0 0 1 18 0v11l-4-3-5 3-5-3-4 3Z"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linejoin="round"
-              />
-              <path
-                d="M12 14v3m8-3v3"
-                stroke="currentColor"
-                stroke-width="2.5"
-                stroke-linecap="round"
-              /></svg></span
+            ><img
+              src="/ghost-coach-icon.png"
+              alt=""
+              width="34"
+              height="34" /></span
           ><strong>Ghost Coach<small>Your quiet advantage</small></strong>
         </div>
         <p class="nav-label">WORKSPACE</p>
@@ -354,74 +347,45 @@
                 <article id="setup-connections" class="card setup-panel">
                   <h3>Connect your coach</h3>
                   <p class="help">
-                    Deepgram creates captions. Your chosen AI provider suggests
-                    replies. A coach key is optional.
+                    Deepgram creates live captions. OpenRouter provides reply
+                    suggestions. Your settings save automatically.
                   </p>
                   <div class="fields">
-                    <label class="field">
-                      <span>Captions key (Deepgram)</span>
-                      <input id="dg-key" type="password" autocomplete="off" />
-                    </label>
-                    <label class="field">
-                      <span id="coach-key-label">Google Gemini API key</span>
-                      <input
-                        id="coach-key"
+                    <label class="field"
+                      ><span>Deepgram API key</span
+                      ><input
+                        id="dg-key"
                         type="password"
                         autocomplete="off"
-                        placeholder="Paste your Google Gemini API key"
-                      />
-                    </label>
+                        placeholder="Paste your Deepgram API key"
+                    /></label>
+                    <label class="field"
+                      ><span>OpenRouter API key</span
+                      ><input
+                        id="openrouter-key"
+                        type="password"
+                        autocomplete="off"
+                        placeholder="Paste your OpenRouter API key"
+                    /></label>
+                    <label class="field full"
+                      ><span>Model</span
+                      ><input
+                        id="openrouter-model"
+                        type="text"
+                        autocomplete="off"
+                        autocapitalize="none"
+                        spellcheck="false"
+                        placeholder="Enter an OpenRouter model ID"
+                        aria-describedby="model-help"
+                      /><small id="model-help" class="help"
+                        >Type the full model ID from OpenRouter. Required for
+                        reply suggestions.</small
+                      ></label
+                    >
                   </div>
-                  <details class="advanced-setup">
-                    <summary>
-                      Advanced setup <span>Provider &amp; model</span>
-                    </summary>
-                    <p class="help">
-                      Change the service used for reply suggestions. Your
-                      choices save automatically.
-                    </p>
-                    <div class="fields">
-                      <label class="field">
-                        <span>Provider</span>
-                        <select id="ai-provider">
-                          <option value="gemini">Google Gemini</option>
-                          <option value="openai">OpenAI</option>
-                          <option value="openrouter">OpenRouter</option>
-                        </select> </label
-                      ><label class="field">
-                        <span>Model</span>
-                        <select id="coach-model"></select>
-                      </label>
-                    </div>
-                  </details>
                   <p id="ai-status" class="badge" style="margin-top: 16px">
-                    Needs attention
+                    Add a Deepgram API key to begin.
                   </p>
-                  <input
-                    id="google-key"
-                    type="password"
-                    class="hidden"
-                    autocomplete="off"
-                  />
-                  <input id="google-model" class="hidden" autocomplete="off" />
-                  <input
-                    id="oai-key"
-                    type="password"
-                    class="hidden"
-                    autocomplete="off"
-                  />
-                  <input id="oai-model" class="hidden" autocomplete="off" />
-                  <input
-                    id="openrouter-key"
-                    type="password"
-                    class="hidden"
-                    autocomplete="off"
-                  />
-                  <input
-                    id="openrouter-model"
-                    class="hidden"
-                    autocomplete="off"
-                  />
                 </article>
                 <article id="setup-audio" class="card setup-panel hidden">
                   <h3>Check your audio</h3>

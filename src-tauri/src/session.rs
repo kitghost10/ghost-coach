@@ -102,6 +102,9 @@ pub fn start_listening(
     if deepgram_key.trim().is_empty() {
         return Err("Paste a Deepgram API key first.".into());
     }
+    if ai_provider.eq_ignore_ascii_case("openrouter") && !openrouter_key.trim().is_empty() && openrouter_model.trim().is_empty() {
+        return Err("Enter an OpenRouter model ID in Connections.".into());
+    }
     if !engine.stop.load(Ordering::Relaxed) {
         return Err("Already listening.".into());
     }
@@ -130,10 +133,7 @@ pub fn start_listening(
         openrouter_key,
         saved.as_ref().map(|s| s.openrouter_key.as_str()),
     );
-    let openrouter_model = nonempty(
-        openrouter_model,
-        saved.as_ref().map(|s| s.openrouter_model.as_str()),
-    );
+    let openrouter_model = openrouter_model.trim().to_string();
     let ai_provider = nonempty(ai_provider, saved.as_ref().map(|s| s.ai_provider.as_str()));
     let coach_cfg = CoachSettings {
         provider: if ai_provider.is_empty() {

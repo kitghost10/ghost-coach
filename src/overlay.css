@@ -642,3 +642,8 @@ html[data-theme="dark"] .goal {
     font-size: 0.7rem;
   }
 }
+
+.ghost-mark img {
+  display: block;
+  border-radius: 7px;
+}

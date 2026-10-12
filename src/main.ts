@@ -39,20 +39,12 @@ const historySearch = document.querySelector(
   "#history-search",
 ) as HTMLInputElement;
 const dgKey = document.querySelector("#dg-key") as HTMLInputElement;
-const oaiKey = document.querySelector("#oai-key") as HTMLInputElement;
-const oaiModel = document.querySelector("#oai-model") as HTMLInputElement;
-const googleKey = document.querySelector("#google-key") as HTMLInputElement;
-const googleModel = document.querySelector("#google-model") as HTMLInputElement;
 const openrouterKey = document.querySelector(
   "#openrouter-key",
 ) as HTMLInputElement;
 const openrouterModel = document.querySelector(
   "#openrouter-model",
 ) as HTMLInputElement;
-const coachKey = document.querySelector("#coach-key") as HTMLInputElement;
-const coachModel = document.querySelector("#coach-model") as HTMLSelectElement;
-const coachKeyLabel = document.querySelector("#coach-key-label") as HTMLElement;
-const provider = document.querySelector("#ai-provider") as HTMLSelectElement;
 const autoAnswer = document.querySelector("#auto-answer") as HTMLInputElement;
 const ovTheme = document.querySelector("#ov-theme") as HTMLSelectElement;
 const ovFont = document.querySelector("#ov-font") as HTMLInputElement;
@@ -109,6 +101,12 @@ let activeView: View = "sessions";
 let micDetected = false;
 let systemDetected = false;
 let justFinished = false;
+let previousConnections = {
+  openaiKey: "",
+  openaiModel: "",
+  googleApiKey: "",
+  googleModel: "",
+};
 
 function openSetup(section = "connections") {
   showView("settings");
@@ -126,11 +124,7 @@ function openSetup(section = "connections") {
 function updateReadiness() {
   const k = keys();
   const captions = !!k.deepgramKey;
-  const coach = !!(k.aiProvider === "openai"
-    ? k.openaiKey
-    : k.aiProvider === "openrouter"
-      ? k.openrouterKey
-      : k.googleApiKey);
+  const coach = !!k.openrouterKey && !!k.openrouterModel;
   const set = (id: string, ready: boolean) => {
     const el = document.getElementById(id)!;
     el.textContent = ready ? "✓" : "○";
@@ -144,7 +138,9 @@ function updateReadiness() {
     : "Add a captions key to begin";
   document.getElementById("coach-ready")!.textContent = coach
     ? "Key added · checked when you start"
-    : "Optional · captions work without it";
+    : k.openrouterKey
+      ? "Enter a model ID in Connections"
+      : "Optional · captions work without it";
   document.getElementById("audio-ready")!.textContent =
     micDetected && systemDetected
       ? "Both sources detected"
@@ -186,148 +182,25 @@ async function pushOverlayPrefs() {
 
 function keys() {
   return {
+    ...previousConnections,
     deepgramKey: dgKey.value.trim(),
-    openaiKey: oaiKey.value.trim(),
-    openaiModel: oaiModel.value.trim() || "gpt-4o-mini",
-    googleApiKey: googleKey.value.trim(),
-    googleModel: googleModel.value.trim() || "gemini-2.5-flash-lite",
     openrouterKey: openrouterKey.value.trim(),
-    openrouterModel: openrouterModel.value.trim() || "openai/gpt-6-luna",
-    aiProvider: provider.value,
+    openrouterModel: openrouterModel.value.trim(),
+    aiProvider: "openrouter",
     overlay: overlayPrefs(),
   };
 }
 
-function ensureProviderOptions() {
-  const wanted = [
-    ["gemini", "Google Gemini"],
-    ["openai", "OpenAI"],
-    ["openrouter", "OpenRouter"],
-  ];
-  const existing = new Set(
-    Array.from(provider.options).map((option) => option.value),
-  );
-  for (const [value, label] of wanted) {
-    if (!existing.has(value)) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = label;
-      provider.appendChild(option);
-    }
-  }
-}
-
-const COACH_MODELS: Record<string, Array<[string, string]>> = {
-  gemini: [
-    ["gemini-2.5-flash-lite", "Gemini 2.5 Flash Lite"],
-    ["gemini-2.5-flash", "Gemini 2.5 Flash"],
-    ["gemini-2.0-flash-lite", "Gemini 2.0 Flash Lite"],
-  ],
-  openai: [
-    ["gpt-4o-mini", "GPT-4o mini"],
-    ["gpt-4o", "GPT-4o"],
-    ["gpt-4.1-mini", "GPT-4.1 mini"],
-    ["gpt-4.1", "GPT-4.1"],
-  ],
-  openrouter: [
-    ["openai/gpt-6-luna", "GPT-6 Luna (openai/gpt-6-luna)"],
-    ["openai/gpt-6-sol", "GPT-6 Sol"],
-    ["openai/gpt-4o-mini", "GPT-4o mini"],
-    ["openai/gpt-4o", "GPT-4o"],
-    ["openai/gpt-4.1-mini", "GPT-4.1 mini"],
-    ["openai/gpt-4.1", "GPT-4.1"],
-    ["openai/gpt-5-mini", "GPT-5 mini"],
-    ["openai/gpt-5", "GPT-5"],
-  ],
-};
-
-function defaultCoachModel() {
-  if (provider.value === "openai") return "gpt-4o-mini";
-  if (provider.value === "openrouter") return "openai/gpt-6-luna";
-  return "gemini-2.5-flash-lite";
-}
-
-function fillCoachModels(selected?: string) {
-  const models = COACH_MODELS[provider.value] ?? COACH_MODELS.gemini;
-  const wanted = selected?.trim() || defaultCoachModel();
-  coachModel.innerHTML = "";
-  const seen = new Set<string>();
-  for (const [value, label] of models) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    coachModel.appendChild(option);
-    seen.add(value);
-  }
-  if (wanted && !seen.has(wanted)) {
-    const extra = document.createElement("option");
-    extra.value = wanted;
-    extra.textContent = wanted;
-    coachModel.appendChild(extra);
-  }
-  coachModel.value = wanted;
-}
-
-function coachCopy() {
-  if (provider.value === "openai") {
-    return {
-      label: "OpenAI API key",
-      keyPlaceholder: "Paste your OpenAI API key",
-    };
-  }
-  if (provider.value === "openrouter") {
-    return {
-      label: "OpenRouter API key",
-      keyPlaceholder: "Paste your OpenRouter API key",
-    };
-  }
-  return {
-    label: "Google Gemini API key",
-    keyPlaceholder: "Paste your Google Gemini API key",
-  };
-}
-
-function syncCoachFields(fromUi: boolean) {
-  ensureProviderOptions();
-  const copy = coachCopy();
-  coachKeyLabel.textContent = copy.label;
-  coachKey.placeholder = copy.keyPlaceholder;
-  if (fromUi) {
-    if (provider.value === "openai") {
-      oaiKey.value = coachKey.value;
-      oaiModel.value = coachModel.value || "gpt-4o-mini";
-    } else if (provider.value === "openrouter") {
-      openrouterKey.value = coachKey.value;
-      openrouterModel.value = coachModel.value || "openai/gpt-6-luna";
-    } else {
-      googleKey.value = coachKey.value;
-      googleModel.value = coachModel.value || "gemini-2.5-flash-lite";
-    }
-  } else if (provider.value === "openai") {
-    coachKey.value = oaiKey.value;
-    fillCoachModels(oaiModel.value || "gpt-4o-mini");
-  } else if (provider.value === "openrouter") {
-    coachKey.value = openrouterKey.value;
-    fillCoachModels(openrouterModel.value || "openai/gpt-6-luna");
-  } else {
-    coachKey.value = googleKey.value;
-    fillCoachModels(googleModel.value || "gemini-2.5-flash-lite");
-  }
+function updateConnectionStatus() {
   const k = keys();
-  const captions = k.deepgramKey.length > 8;
-  const coach =
-    k.aiProvider === "openai"
-      ? k.openaiKey.length > 8
-      : k.aiProvider === "openrouter"
-        ? k.openrouterKey.length > 8
-        : k.googleApiKey.length > 8;
-  aiStatus.textContent =
-    captions && coach
-      ? "Keys added · connection checked when a session starts"
-      : captions
-        ? "Captions key added · coach is optional"
-        : "Add a captions key to begin";
-  aiStatus.className = `badge ${captions ? "live" : "ready"}`;
+  aiStatus.textContent = !k.deepgramKey
+    ? "Add a Deepgram API key to begin."
+    : k.openrouterKey && !k.openrouterModel
+      ? "Enter a model ID to enable reply suggestions."
+      : k.openrouterKey
+        ? "Keys and model added · checked when you start"
+        : "Captions ready · OpenRouter is optional";
+  aiStatus.className = `badge ${k.deepgramKey ? "live" : "ready"}`;
   updateReadiness();
 }
 
@@ -489,6 +362,12 @@ async function startSession() {
     openSetup("connections");
     dgKey.focus();
     setStatus("Add a captions key to start coaching.");
+    return;
+  }
+  if (openrouterKey.value.trim() && !openrouterModel.value.trim()) {
+    openSetup("connections");
+    openrouterModel.focus();
+    setStatus("Enter an OpenRouter model ID to use reply suggestions.");
     return;
   }
   startCall.disabled = true;
@@ -684,21 +563,11 @@ historySearch.addEventListener("input", render);
   el?.addEventListener("input", saveBrief);
   el?.addEventListener("change", saveBrief);
 });
-dgKey.addEventListener("input", () => {
-  syncCoachFields(true);
-  persist().catch(showError);
-});
-coachKey.addEventListener("input", () => {
-  syncCoachFields(true);
-  persist().catch(showError);
-});
-coachModel.addEventListener("change", () => {
-  syncCoachFields(true);
-  persist().catch(showError);
-});
-provider.addEventListener("change", () => {
-  syncCoachFields(false);
-  persist().catch(showError);
+[dgKey, openrouterKey, openrouterModel].forEach((field) => {
+  field.addEventListener("input", () => {
+    updateConnectionStatus();
+    persist().catch(showError);
+  });
 });
 autoAnswer.addEventListener("change", async () => {
   localStorage.setItem(AUTO_KEY, autoAnswer.checked ? "1" : "0");
@@ -897,11 +766,7 @@ async function initTauri() {
       const state = document.getElementById("live-coach-state")!;
       if (payload.tag === "CAPTION") {
         const k = keys();
-        const coach = !!(k.aiProvider === "openai"
-          ? k.openaiKey
-          : k.aiProvider === "openrouter"
-            ? k.openrouterKey
-            : k.googleApiKey);
+        const coach = !!k.openrouterKey && !!k.openrouterModel;
         state.textContent = !coach
           ? "Captions only · coach key needed"
           : autoAnswer.checked
@@ -946,22 +811,14 @@ async function initTauri() {
     };
   }>("load_config");
   dgKey.value = saved.deepgram_key ?? "";
-  oaiKey.value = saved.openai_key ?? "";
-  oaiModel.value = saved.openai_model || "gpt-4o-mini";
-  googleKey.value = saved.google_api_key ?? "";
-  googleModel.value =
-    saved.google_model === "gemini-2.5-flash"
-      ? "gemini-2.5-flash-lite"
-      : saved.google_model || "gemini-2.5-flash-lite";
+  previousConnections = {
+    openaiKey: saved.openai_key ?? "",
+    openaiModel: saved.openai_model ?? "",
+    googleApiKey: saved.google_api_key ?? "",
+    googleModel: saved.google_model ?? "",
+  };
   openrouterKey.value = saved.openrouter_key ?? "";
-  openrouterModel.value = saved.openrouter_model || "openai/gpt-6-luna";
-  ensureProviderOptions();
-  provider.value =
-    saved.ai_provider === "openai"
-      ? "openai"
-      : saved.ai_provider === "gemini"
-        ? "gemini"
-        : "openrouter";
+  openrouterModel.value = saved.openrouter_model ?? "";
 
   const storedAutoAnswer = localStorage.getItem(AUTO_KEY);
   autoAnswer.checked =
@@ -977,7 +834,7 @@ async function initTauri() {
   }
   saveBrief();
   applySavedOverlay(saved.overlay ?? {});
-  syncCoachFields(false);
+  updateConnectionStatus();
   await persist();
   paintMeters(0, 0);
   await pushOverlayPrefs().catch(() => undefined);
@@ -985,5 +842,4 @@ async function initTauri() {
 }
 
 render();
-ensureProviderOptions();
 initTauri().catch(showError);
