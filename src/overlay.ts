@@ -23,28 +23,15 @@ type CoachState = "idle" | "listening" | "thinking" | "ready" | "error";
 
 type OverlayLook = {
   theme: string;
-  layout: string;
-  size: string;
-  position: string;
   font_scale: number;
-  opacity: number;
 };
 
 function applyLook(prefs: Partial<OverlayLook>) {
   const theme = prefs.theme === "dark" ? "dark" : "light";
-  const layout =
-    prefs.layout === "captions" || prefs.layout === "suggest"
-      ? prefs.layout
-      : "both";
   document.documentElement.dataset.theme = theme;
-  document.documentElement.dataset.layout = layout;
   document.documentElement.style.setProperty(
     "--font-scale",
     String(prefs.font_scale ?? 1),
-  );
-  document.documentElement.style.setProperty(
-    "--panel-alpha",
-    String(prefs.opacity ?? 0.88),
   );
 }
 

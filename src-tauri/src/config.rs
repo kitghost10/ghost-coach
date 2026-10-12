@@ -26,78 +26,36 @@ fn default_overlay_theme() -> String {
     "light".into()
 }
 
-fn default_overlay_layout() -> String {
-    "both".into()
-}
-
-fn default_overlay_size() -> String {
-    "comfortable".into()
-}
-
-fn default_overlay_position() -> String {
-    "top".into()
-}
-
 fn default_font_scale() -> f32 {
     1.0
-}
-
-fn default_opacity() -> f32 {
-    0.88
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct OverlayPrefs {
     #[serde(default = "default_overlay_theme")]
     pub theme: String,
-    #[serde(default = "default_overlay_layout")]
-    pub layout: String,
-    #[serde(default = "default_overlay_size")]
-    pub size: String,
-    #[serde(default = "default_overlay_position")]
-    pub position: String,
     #[serde(default = "default_font_scale")]
     pub font_scale: f32,
-    #[serde(default = "default_opacity")]
-    pub opacity: f32,
 }
 
 impl Default for OverlayPrefs {
     fn default() -> Self {
         Self {
             theme: default_overlay_theme(),
-            layout: default_overlay_layout(),
-            size: default_overlay_size(),
-            position: default_overlay_position(),
             font_scale: default_font_scale(),
-            opacity: default_opacity(),
         }
     }
 }
 
 impl OverlayPrefs {
     pub fn sanitized(self) -> Self {
-        let theme = if self.theme == "dark" { "dark" } else { "light" };
-        let layout = match self.layout.as_str() {
-            "captions" | "suggest" => self.layout.as_str(),
-            _ => "both",
-        };
-        let size = match self.size.as_str() {
-            "compact" | "large" => self.size.as_str(),
-            _ => "comfortable",
-        };
-        let position = if self.position == "bottom" {
-            "bottom"
-        } else {
-            "top"
-        };
         Self {
-            theme: theme.into(),
-            layout: layout.into(),
-            size: size.into(),
-            position: position.into(),
+            theme: if self.theme == "dark" {
+                "dark".into()
+            } else {
+                "light".into()
+            },
             font_scale: self.font_scale.clamp(0.85, 1.5),
-            opacity: self.opacity.clamp(0.5, 0.96),
         }
     }
 }
@@ -120,8 +78,6 @@ pub struct SavedConfig {
     pub openrouter_model: String,
     #[serde(default = "default_provider")]
     pub ai_provider: String,
-    #[serde(default)]
-    pub click_through: bool,
     #[serde(default)]
     pub overlay: OverlayPrefs,
 }
@@ -172,7 +128,6 @@ pub fn load_config(app: AppHandle) -> Result<SavedConfig, String> {
     let path = config_path(&app)?;
     if !path.exists() {
         return Ok(SavedConfig {
-            click_through: false,
             ai_provider: default_provider(),
             google_model: default_google_model(),
             openai_model: default_openai_model(),
@@ -196,7 +151,6 @@ pub fn save_config(
     openrouter_key: String,
     openrouter_model: String,
     ai_provider: String,
-    click_through: bool,
     overlay: Option<OverlayPrefs>,
 ) -> Result<(), String> {
     let path = config_path(&app)?;
@@ -212,9 +166,46 @@ pub fn save_config(
     cfg.openrouter_key = openrouter_key;
     cfg.openrouter_model = openrouter_model;
     cfg.ai_provider = ai_provider;
-    cfg.click_through = click_through;
     if let Some(overlay) = overlay {
         cfg.overlay = overlay.sanitized();
     }
     fs::write(path, serde_json::to_string_pretty(&cfg).unwrap()).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OverlayPrefs, SavedConfig};
+
+    #[test]
+    fn legacy_config_keeps_connections_and_discards_retired_preferences() {
+        let raw = r#"{
+            "deepgram_key":"example-captions-key",
+            "openrouter_key":"example-coach-key",
+            "ai_provider":"openrouter",
+            "click_through":true,
+            "overlay":{"theme":"dark","font_scale":1.25,"layout":"suggest","size":"large","position":"bottom","opacity":0.5}
+        }"#;
+        let cfg: SavedConfig = serde_json::from_str(raw).unwrap();
+        assert_eq!(cfg.deepgram_key, "example-captions-key");
+        assert_eq!(cfg.openrouter_key, "example-coach-key");
+        assert_eq!(cfg.ai_provider, "openrouter");
+        assert_eq!(cfg.overlay.theme, "dark");
+        assert_eq!(cfg.overlay.font_scale, 1.25);
+        let saved = serde_json::to_value(cfg).unwrap();
+        assert!(saved.get("click_through").is_none());
+        assert_eq!(
+            saved["overlay"],
+            serde_json::json!({"theme":"dark","font_scale":1.25})
+        );
+    }
+
+    #[test]
+    fn simplified_overlay_preferences_accept_text_size_and_use_defaults() {
+        let prefs: OverlayPrefs =
+            serde_json::from_str(r#"{"theme":"dark","font_scale":1.4}"#).unwrap();
+        assert_eq!(prefs.sanitized().font_scale, 1.4);
+        let defaults: OverlayPrefs = serde_json::from_str("{}").unwrap();
+        assert_eq!(defaults.theme, "light");
+        assert_eq!(defaults.font_scale, 1.0);
+    }
 }

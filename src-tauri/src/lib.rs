@@ -11,7 +11,7 @@ mod session;
 
 use config::{list_calls, load_call, load_config, open_call_audio, open_calls_folder, save_config};
 use engine::Engine;
-use overlay_win::{hide_overlay, set_click_through, set_overlay_prefs, show_overlay};
+use overlay_win::{hide_overlay, set_overlay_prefs, show_overlay};
 use preview::{restart_meter_preview, start_meter_preview};
 use session::{generate_answer, set_auto_answer, start_listening, stop_listening};
 use std::sync::atomic::Ordering;
@@ -25,7 +25,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_config,
             save_config,
-            set_click_through,
             set_overlay_prefs,
             hide_overlay,
             show_overlay,

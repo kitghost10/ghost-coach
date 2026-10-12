@@ -32,9 +32,6 @@ const stopCall = document.querySelector("#stop-call") as HTMLButtonElement;
 const showOverlayBtn = document.querySelector(
   "#show-overlay",
 ) as HTMLButtonElement;
-const recentRows = document.querySelector("#recent-rows") as HTMLElement;
-const recentWrap = document.querySelector("#recent-wrap") as HTMLElement;
-const recentEmpty = document.querySelector("#recent-empty") as HTMLElement;
 const historyRows = document.querySelector("#history-rows") as HTMLElement;
 const historyWrap = document.querySelector("#history-wrap") as HTMLElement;
 const historyEmpty = document.querySelector("#history-empty") as HTMLElement;
@@ -56,20 +53,10 @@ const coachKey = document.querySelector("#coach-key") as HTMLInputElement;
 const coachModel = document.querySelector("#coach-model") as HTMLSelectElement;
 const coachKeyLabel = document.querySelector("#coach-key-label") as HTMLElement;
 const provider = document.querySelector("#ai-provider") as HTMLSelectElement;
-const clickThrough = document.querySelector(
-  "#click-through",
-) as HTMLInputElement;
 const autoAnswer = document.querySelector("#auto-answer") as HTMLInputElement;
 const ovTheme = document.querySelector("#ov-theme") as HTMLSelectElement;
-const ovLayout = document.querySelector("#ov-layout") as HTMLSelectElement;
-const ovSize = document.querySelector("#ov-size") as HTMLSelectElement;
-const ovPosition = document.querySelector("#ov-position") as HTMLSelectElement;
 const ovFont = document.querySelector("#ov-font") as HTMLInputElement;
-const ovOpacity = document.querySelector("#ov-opacity") as HTMLInputElement;
 const ovFontLabel = document.querySelector("#ov-font-label") as HTMLElement;
-const ovOpacityLabel = document.querySelector(
-  "#ov-opacity-label",
-) as HTMLElement;
 const transcriptTitle = document.querySelector(
   "#transcript-title",
 ) as HTMLElement;
@@ -77,7 +64,6 @@ const transcriptSub = document.querySelector("#transcript-sub") as HTMLElement;
 const transcriptBody = document.querySelector(
   "#transcript-body",
 ) as HTMLElement;
-const sessionId = document.querySelector("#session-id") as HTMLElement;
 const aiStatus = document.querySelector("#ai-status") as HTMLElement;
 const youMeter = document.querySelector("#you-meter") as HTMLElement;
 const themMeter = document.querySelector("#them-meter") as HTMLElement;
@@ -89,44 +75,11 @@ const audioHint = document.querySelector("#audio-hint") as HTMLElement;
 const prospectName = document.querySelector(
   "#prospect-name",
 ) as HTMLInputElement;
-const prospectSite = document.querySelector(
-  "#prospect-site",
-) as HTMLInputElement;
-const prospectArea = document.querySelector(
-  "#prospect-area",
-) as HTMLInputElement;
 const callObjective = document.querySelector(
   "#call-objective",
 ) as HTMLSelectElement;
 const prospectNotes = document.querySelector(
   "#prospect-notes",
-) as HTMLTextAreaElement;
-const dealStage = document.querySelector("#deal-stage") as HTMLSelectElement;
-const problemSeverity = document.querySelector(
-  "#problem-severity",
-) as HTMLSelectElement;
-const monthlyLeads = document.querySelector(
-  "#monthly-leads",
-) as HTMLInputElement;
-const budget = document.querySelector("#budget") as HTMLInputElement;
-const decisionTiming = document.querySelector(
-  "#decision-timing",
-) as HTMLSelectElement;
-const qualificationNote = document.querySelector(
-  "#qualification-note",
-) as HTMLElement;
-const opportunityScore = document.querySelector(
-  "#opportunity-score",
-) as HTMLElement;
-const painChecks = Array.from(
-  document.querySelectorAll<HTMLInputElement>(".pain-check"),
-);
-const objectionResponse = document.querySelector(
-  "#objection-response",
-) as HTMLElement;
-const followupWrap = document.querySelector("#followup-wrap") as HTMLElement;
-const followupText = document.querySelector(
-  "#followup-text",
 ) as HTMLTextAreaElement;
 
 const views: Record<View, HTMLElement> = {
@@ -208,37 +161,22 @@ function updateReadiness() {
 function overlayPrefs() {
   return {
     theme: ovTheme.value === "dark" ? "dark" : "light",
-    layout: ovLayout.value,
-    size: ovSize.value,
-    position: ovPosition.value,
-    fontScale: Number(ovFont.value) / 100,
-    opacity: Number(ovOpacity.value) / 100,
+    font_scale: Number(ovFont.value) / 100,
   };
 }
 
 function syncOverlayLabels() {
   ovFontLabel.textContent = `${ovFont.value}%`;
-  ovOpacityLabel.textContent = `${ovOpacity.value}%`;
 }
 
 function applySavedOverlay(saved: {
   theme?: string;
-  layout?: string;
-  size?: string;
-  position?: string;
+
   font_scale?: number;
-  opacity?: number;
 }) {
   ovTheme.value = saved.theme === "dark" ? "dark" : "light";
-  ovLayout.value = ["both", "captions", "suggest"].includes(saved.layout ?? "")
-    ? saved.layout!
-    : "both";
-  ovSize.value = ["compact", "comfortable", "large"].includes(saved.size ?? "")
-    ? saved.size!
-    : "comfortable";
-  ovPosition.value = saved.position === "bottom" ? "bottom" : "top";
   ovFont.value = String(Math.round((saved.font_scale ?? 1) * 100));
-  ovOpacity.value = String(Math.round((saved.opacity ?? 0.88) * 100));
+
   syncOverlayLabels();
 }
 
@@ -256,7 +194,6 @@ function keys() {
     openrouterKey: openrouterKey.value.trim(),
     openrouterModel: openrouterModel.value.trim() || "openai/gpt-6-luna",
     aiProvider: provider.value,
-    clickThrough: clickThrough.checked,
     overlay: overlayPrefs(),
   };
 }
@@ -478,7 +415,6 @@ function rowHtml(meta: CallMeta) {
 function setLiveUi() {
   document.getElementById("prepare-panel")!.classList.toggle("hidden", live);
   document.getElementById("live-panel")!.classList.toggle("hidden", !live);
-  document.getElementById("recent-section")!.classList.toggle("hidden", live);
   document
     .getElementById("saved-banner")!
     .classList.toggle("hidden", !justFinished || live || !calls.length);
@@ -496,30 +432,20 @@ function setLiveUi() {
     pageTitle.textContent = live ? "Live call" : "New call";
   document.getElementById("live-prospect")!.textContent =
     prospectName.value || "Current conversation";
-  [
-    prospectName,
-    prospectSite,
-    prospectArea,
-    callObjective,
-    prospectNotes,
-  ].forEach((field) => {
+  [prospectName, callObjective, prospectNotes].forEach((field) => {
     field.disabled = live;
   });
   updateReadiness();
 }
 
 function render() {
-  const recent = calls.slice(0, 5);
-  recentEmpty.classList.toggle("hidden", recent.length > 0);
-  recentWrap.classList.toggle("hidden", recent.length === 0);
-  recentRows.innerHTML = recent.map((meta) => rowHtml(meta)).join("");
-
   const query = historySearch.value.trim().toLowerCase();
   const filtered = calls.filter(
     (meta) =>
       !query ||
-      callName(meta).toLowerCase().includes(query) ||
-      meta.id.toLowerCase().includes(query),
+      `${formatDate(meta.started_unix)} ${meta.preview}`
+        .toLowerCase()
+        .includes(query),
   );
   historyEmpty.classList.toggle("hidden", filtered.length > 0);
   historyEmpty.querySelector("h3")!.textContent = query
@@ -539,58 +465,13 @@ function render() {
 function prospectBrief() {
   return {
     name: prospectName.value.trim(),
-    site: prospectSite.value.trim(),
-    area: prospectArea.value.trim(),
     objective: callObjective.value,
     notes: prospectNotes.value.trim(),
   };
 }
 
 function saveBrief() {
-  localStorage.setItem(
-    PROSPECT_KEY,
-    JSON.stringify({
-      ...prospectBrief(),
-      stage: dealStage.value,
-      checks: painChecks.map((c) => c.checked),
-      severity: problemSeverity.value,
-      monthlyLeads: monthlyLeads.value,
-      budget: budget.value,
-      timing: decisionTiming.value,
-    }),
-  );
-  updateOpportunity();
-}
-
-function updateOpportunity() {
-  const score = painChecks.filter((c) => c.checked).length;
-  const bonus =
-    (problemSeverity.value === "High" ? 1 : 0) +
-    (budget.value.trim() && budget.value.toLowerCase() !== "unknown" ? 1 : 0) +
-    (decisionTiming.value !== "Unknown" ? 1 : 0);
-  const total = score + bonus;
-  opportunityScore.textContent = `${total}/8`;
-  opportunityScore.className = `opportunity-score ${total >= 6 ? "strong" : total >= 3 ? "warm" : ""}`;
-  qualificationNote.textContent =
-    total >= 6
-      ? "Strong fit: confirm the next step and follow-up date."
-      : total >= 3
-        ? "Promising: quantify the impact and confirm budget or timing."
-        : "Qualification improves as you confirm impact, authority, budget, and timing.";
-}
-
-function draftFollowup(detail: CallDetail) {
-  const p = prospectBrief();
-  const name = p.name || "there";
-  const service = p.objective.replace(/^Sell /, "");
-  const transcript =
-    detail.transcript ||
-    detail.entries
-      .filter((e) => e.role !== "coach")
-      .map((e) => e.text)
-      .join(" ");
-  followupText.value = `Subject: Quick follow-up for ${p.name || "your business"}\n\nHi ${name},\n\nThanks for taking the time to speak with me. I noted that ${p.notes || "there are a few opportunities to improve how your marketing turns attention into enquiries"}.\n\nBased on our conversation, the most useful next step would be to look at ${service.toLowerCase()} and identify the quickest opportunities to improve lead quality and conversion${p.area ? ` in ${p.area}` : ""}.\n\nI can send over a short, practical review with the first changes I would make and how I would measure them. Would you be open to a follow-up conversation this week?\n\nBest,\n[Your name]\n\nCall notes:\n${transcript.slice(0, 700)}`;
-  followupWrap.classList.remove("hidden");
+  localStorage.setItem(PROSPECT_KEY, JSON.stringify(prospectBrief()));
 }
 
 async function persist() {
@@ -630,13 +511,7 @@ async function startSession() {
       openrouterModel: k.openrouterModel,
       aiProvider: k.aiProvider,
       autoAnswer: autoSuggest,
-      prospectBrief: JSON.stringify({
-        ...prospectBrief(),
-        stage: dealStage.value,
-        confirmedPainPoints: painChecks
-          .filter((c) => c.checked)
-          .map((c) => c.parentElement?.textContent?.trim()),
-      }),
+      prospectBrief: JSON.stringify(prospectBrief()),
     });
     live = true;
     justFinished = false;
@@ -693,15 +568,14 @@ function renderEntries(detail: CallDetail) {
 async function showCall(id: string, from: View) {
   selectedCall = id;
   backTo = from;
-  followupWrap.classList.add("hidden");
-  followupText.value = "";
+
   const detail = await invoke<CallDetail>("load_call", { id });
   const suggestions = detail.entries.filter(
     (entry) => entry.role === "coach",
   ).length;
   transcriptTitle.textContent = callName(detail.meta);
   transcriptSub.textContent = `${formatDate(detail.meta.started_unix)} · ${formatDuration(detail.meta.duration_secs)} · ${detail.meta.line_count} spoken lines · ${suggestions} AI suggestions`;
-  sessionId.textContent = `Session id: ${detail.meta.id}`;
+
   renderEntries(detail);
   showView("transcript");
 }
@@ -740,32 +614,17 @@ document
   .getElementById("check-audio")!
   .addEventListener("click", () => openSetup("audio"));
 document
-  .getElementById("see-all-calls")!
-  .addEventListener("click", () => showView("history"));
-document
   .getElementById("history-new-call")!
   .addEventListener("click", () => showView("sessions"));
 document.getElementById("review-latest")!.addEventListener("click", () => {
   if (calls[0]) showCall(calls[0].id, "sessions").catch(showError);
 });
 document.getElementById("clear-brief")!.addEventListener("click", () => {
-  [
-    prospectName,
-    prospectSite,
-    prospectArea,
-    prospectNotes,
-    monthlyLeads,
-    budget,
-  ].forEach((input) => {
+  [prospectName, prospectNotes].forEach((input) => {
     input.value = "";
   });
-  [callObjective, dealStage, problemSeverity, decisionTiming].forEach(
-    (select) => {
-      select.selectedIndex = 0;
-    },
-  );
-  painChecks.forEach((check) => {
-    check.checked = false;
+  [callObjective].forEach((select) => {
+    select.selectedIndex = 0;
   });
   saveBrief();
   justFinished = false;
@@ -794,14 +653,6 @@ document
   .querySelector("#back")
   ?.addEventListener("click", () => showView(backTo));
 
-recentRows.addEventListener("click", (event) => {
-  const row = (event.target as HTMLElement).closest(
-    "tr[data-call]",
-  ) as HTMLElement | null;
-  if (row?.dataset.call) {
-    showCall(row.dataset.call, "sessions").catch(showError);
-  }
-});
 historyRows.addEventListener("click", (event) => {
   const row = (event.target as HTMLElement).closest(
     "tr[data-call]",
@@ -826,59 +677,15 @@ function keyboardRow(event: KeyboardEvent) {
     ).catch(showError);
   }
 }
-recentRows.addEventListener("keydown", keyboardRow);
 historyRows.addEventListener("keydown", keyboardRow);
 
 historySearch.addEventListener("input", render);
-[
-  prospectName,
-  prospectSite,
-  prospectArea,
-  callObjective,
-  prospectNotes,
-  problemSeverity,
-  monthlyLeads,
-  budget,
-  decisionTiming,
-].forEach((el) => {
+[prospectName, callObjective, prospectNotes].forEach((el) => {
   el?.addEventListener("input", saveBrief);
   el?.addEventListener("change", saveBrief);
 });
-painChecks.forEach((el) => {
-  el.addEventListener("change", saveBrief);
-});
-dealStage?.addEventListener("change", saveBrief);
-document.querySelectorAll<HTMLButtonElement>(".objection").forEach((button) =>
-  button.addEventListener("click", () => {
-    const objection = button.dataset.objection || "";
-    const answers: Record<string, string> = {
-      "We already have a website.":
-        "Agree first, then ask: “Is it consistently turning visitors into booked calls, especially for emergency work?”",
-      "We get most work from referrals.":
-        "Ask whether referrals are predictable enough, then explore how a second channel could create steadier demand.",
-      "I need to think about it.":
-        "Ask what they need to feel comfortable deciding: the price, the plan, or confidence that it will produce booked work?",
-      "That is too expensive.":
-        "Acknowledge the concern, then ask: “Compared with what you expected, or compared with the value of one additional booked job?”",
-      "Send me some information.":
-        "Agree, then ask: “What would you like the information to help you decide?” This keeps the next step specific.",
-      "I need to talk to my partner.":
-        "Ask: “What will your partner want to understand, and should we include them in a short follow-up?”",
-    };
-    objectionResponse.textContent =
-      answers[objection] ||
-      "Ask what is holding them back and connect the answer to a measurable business outcome.";
-  }),
-);
-
 dgKey.addEventListener("input", () => {
   syncCoachFields(true);
-  persist().catch(showError);
-});
-clickThrough.addEventListener("change", () => {
-  invoke("set_click_through", { enabled: clickThrough.checked }).catch(
-    showError,
-  );
   persist().catch(showError);
 });
 coachKey.addEventListener("input", () => {
@@ -914,7 +721,7 @@ autoAnswer.addEventListener("change", async () => {
   }
 });
 
-[ovTheme, ovLayout, ovSize, ovPosition, ovFont, ovOpacity].forEach((el) => {
+[ovTheme, ovFont].forEach((el) => {
   el.addEventListener("input", () => {
     syncOverlayLabels();
     persist().catch(showError);
@@ -968,32 +775,6 @@ document
     await navigator.clipboard.writeText(transcriptBody.innerText || "");
     setStatus("Transcript copied.");
   });
-
-document
-  .querySelector("#make-followup")
-  ?.addEventListener("click", async () => {
-    if (!selectedCall) return;
-    try {
-      draftFollowup(
-        await invoke<CallDetail>("load_call", { id: selectedCall }),
-      );
-    } catch (error) {
-      showError(error);
-    }
-  });
-document
-  .querySelector("#copy-followup")
-  ?.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(followupText.value);
-    setStatus("Follow-up copied.");
-  });
-
-document.querySelector("#copy-id")?.addEventListener("click", async () => {
-  if (selectedCall) {
-    await navigator.clipboard.writeText(selectedCall);
-    setStatus("Session id copied.");
-  }
-});
 
 document.querySelector("#test-mic")?.addEventListener("click", () => {
   listenTarget = "mic";
@@ -1159,14 +940,9 @@ async function initTauri() {
     openrouter_key: string;
     openrouter_model: string;
     ai_provider: string;
-    click_through: boolean;
     overlay?: {
       theme?: string;
-      layout?: string;
-      size?: string;
-      position?: string;
       font_scale?: number;
-      opacity?: number;
     };
   }>("load_config");
   dgKey.value = saved.deepgram_key ?? "";
@@ -1186,31 +962,23 @@ async function initTauri() {
       : saved.ai_provider === "gemini"
         ? "gemini"
         : "openrouter";
-  clickThrough.checked = saved.click_through === true;
+
   const storedAutoAnswer = localStorage.getItem(AUTO_KEY);
   autoAnswer.checked =
     storedAutoAnswer === null ? true : storedAutoAnswer === "1";
   try {
     const brief = JSON.parse(localStorage.getItem(PROSPECT_KEY) || "{}");
     prospectName.value = brief.name || "";
-    prospectSite.value = brief.site || "";
-    prospectArea.value = brief.area || "";
+
     callObjective.value = brief.objective || callObjective.value;
     prospectNotes.value = brief.notes || "";
-    dealStage.value = brief.stage || dealStage.value;
-    problemSeverity.value = brief.severity || problemSeverity.value;
-    monthlyLeads.value = brief.monthlyLeads || "";
-    budget.value = brief.budget || "";
-    decisionTiming.value = brief.timing || decisionTiming.value;
-    (brief.checks || []).forEach((checked: boolean, i: number) => {
-      if (painChecks[i]) painChecks[i].checked = checked;
-    });
   } catch {
     /* ignore invalid local brief */
   }
-  updateOpportunity();
+  saveBrief();
   applySavedOverlay(saved.overlay ?? {});
   syncCoachFields(false);
+  await persist();
   paintMeters(0, 0);
   await pushOverlayPrefs().catch(() => undefined);
   await refreshCalls();

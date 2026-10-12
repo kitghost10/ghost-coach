@@ -134,20 +134,6 @@
                     ></textarea>
                   </label>
                 </div>
-                <details class="extra-context">
-                  <summary>Add website and location <span>＋</span></summary>
-                  <div class="fields">
-                    <label class="field"
-                      ><span>Website</span
-                      ><input
-                        id="prospect-site"
-                        placeholder="https://…" /></label
-                    ><label class="field"
-                      ><span>Location / service area</span
-                      ><input id="prospect-area" placeholder="City or region"
-                    /></label>
-                  </div>
-                </details>
               </article>
               <article class="card launch">
                 <span class="eyebrow">02 · GET READY</span>
@@ -248,200 +234,6 @@
                 </article>
               </div>
             </div>
-            <details id="call-tools" class="call-tools">
-              <summary>
-                <div>
-                  <b>Call notes & objection help</b
-                  ><small>Optional tools for qualifying the opportunity</small>
-                </div>
-                <span>＋</span>
-              </summary>
-              <div class="overview-grid">
-                <details class="card optional-panel">
-                  <summary>
-                    <span
-                      ><b>Opportunity snapshot</b
-                      ><small>Qualification notes and deal details</small></span
-                    ><strong id="opportunity-score" class="opportunity-score"
-                      >0/8</strong
-                    >
-                  </summary>
-                  <div class="optional-body">
-                    <p class="help">Mark what you confirm during the call.</p>
-                    <div class="check compact-check">
-                      <label
-                        ><input class="pain-check" type="checkbox" /> They lose
-                        or miss calls</label
-                      ><label
-                        ><input class="pain-check" type="checkbox" /> Website
-                        does not convert well</label
-                      ><label
-                        ><input class="pain-check" type="checkbox" /> Google
-                        leads are inconsistent</label
-                      ><label
-                        ><input class="pain-check" type="checkbox" />
-                        After-hours coverage is weak</label
-                      ><label
-                        ><input class="pain-check" type="checkbox" /> One booked
-                        job is valuable</label
-                      >
-                    </div>
-                    <label class="field"
-                      ><span>Deal stage</span
-                      ><select id="deal-stage">
-                        <option>New prospect</option>
-                        <option>Qualified</option>
-                        <option>Proposal needed</option>
-                        <option>Follow-up due</option>
-                        <option>Won</option>
-                        <option>Lost</option>
-                      </select></label
-                    >
-                    <div class="field full">
-                      <span>Qualification details</span>
-                      <div class="fields compact-fields">
-                        <label class="field"
-                          ><span>Problem severity</span
-                          ><select id="problem-severity">
-                            <option>Unknown</option>
-                            <option>Low</option>
-                            <option>Medium</option>
-                            <option>High</option>
-                          </select></label
-                        ><label class="field"
-                          ><span>Monthly leads</span
-                          ><input
-                            id="monthly-leads"
-                            placeholder="e.g. 40" /></label
-                        ><label class="field"
-                          ><span>Budget / investment</span
-                          ><input id="budget" placeholder="Unknown" /></label
-                        ><label class="field"
-                          ><span>Decision timing</span
-                          ><select id="decision-timing">
-                            <option>Unknown</option>
-                            <option>This month</option>
-                            <option>Next 90 days</option>
-                            <option>Later</option>
-                          </select></label
-                        >
-                      </div>
-                    </div>
-                    <p id="qualification-note" class="help">
-                      Qualification improves as you confirm impact, authority,
-                      budget, and timing.
-                    </p>
-                  </div>
-                </details>
-                <details class="card optional-panel">
-                  <summary>
-                    <span
-                      ><b>Objection coach</b
-                      ><small
-                        >Open a prompt when a conversation stalls</small
-                      ></span
-                    ><span class="summary-arrow" aria-hidden="true">⌄</span>
-                  </summary>
-                  <div class="optional-body">
-                    <p class="help">
-                      Choose the response angle that fits the moment.
-                    </p>
-                    <div class="objections">
-                      <button
-                        class="objection"
-                        type="button"
-                        data-objection="We already have a website."
-                      >
-                        “We already have a website.”</button
-                      ><button
-                        class="objection"
-                        type="button"
-                        data-objection="We get most work from referrals."
-                      >
-                        “Most of our work comes from referrals.”</button
-                      ><button
-                        class="objection"
-                        type="button"
-                        data-objection="I need to think about it."
-                      >
-                        “I need to think about it.”</button
-                      ><button
-                        class="objection"
-                        type="button"
-                        data-objection="That is too expensive."
-                      >
-                        “That is too expensive.”</button
-                      ><button
-                        class="objection"
-                        type="button"
-                        data-objection="Send me some information."
-                      >
-                        “Send me some information.”</button
-                      ><button
-                        class="objection"
-                        type="button"
-                        data-objection="I need to talk to my partner."
-                      >
-                        “I need to talk to my partner.”
-                      </button>
-                    </div>
-                    <p id="objection-response" class="objection-response">
-                      Choose an objection to get a response angle.
-                    </p>
-                  </div>
-                </details>
-              </div>
-            </details>
-            <div id="recent-section">
-              <div class="section-heading recent-heading">
-                <div>
-                  <h3>Pick up where you left off</h3>
-                  <p class="help">
-                    Your last few conversations, ready to review.
-                  </p>
-                </div>
-                <button id="see-all-calls" class="text-button" type="button">
-                  View call library →
-                </button>
-              </div>
-              <div id="recent-wrap" class="table-wrap hidden">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Conversation</th>
-                      <th>When</th>
-                      <th>Duration</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="recent-rows"></tbody>
-                </table>
-              </div>
-              <div id="recent-empty" class="empty-state compact-empty">
-                <span class="empty-symbol"
-                  ><svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
-                    <path
-                      d="M7 25V14a9 9 0 0 1 18 0v11l-4-3-5 3-5-3-4 3Z"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M12 14v3m8-3v3"
-                      stroke="currentColor"
-                      stroke-width="2.5"
-                      stroke-linecap="round"
-                    /></svg
-                ></span>
-                <div>
-                  <h3>Your first call starts here.</h3>
-                  <p>
-                    After a session, find its recording and notes in your call
-                    library.
-                  </p>
-                </div>
-              </div>
-            </div>
           </section>
           <section id="view-history" class="view hidden">
             <div class="page-copy">
@@ -518,41 +310,17 @@
               <button id="play-audio" class="btn btn-primary" type="button">
                 Listen to recording</button
               ><button id="copy-transcript" class="btn" type="button">
-                Copy transcript</button
-              ><button id="make-followup" class="btn" type="button">
-                Draft follow-up
+                Copy transcript
               </button>
-              <details class="more-actions">
-                <summary>More</summary>
-                <button id="copy-id" class="text-button" type="button">
-                  Copy session ID
-                </button>
-                <p id="session-id" class="session-id"></p>
-              </details>
             </div>
-            <div id="followup-wrap" class="card followup hidden">
-              <div class="section-heading">
-                <h3>Follow-up draft</h3>
-                <span class="badge">Review before sending</span>
-              </div>
-              <textarea
-                id="followup-text"
-                aria-label="Follow-up draft"
-                rows="9"
-              ></textarea>
-              <div class="toolbar">
-                <button id="copy-followup" class="btn" type="button">
-                  Copy draft
-                </button>
-              </div>
-            </div>
+
             <div id="transcript-body" class="transcript"></div>
           </section>
           <section id="view-settings" class="view hidden">
             <div class="page-copy">
               <span class="eyebrow">MAKE IT YOURS</span>
               <h2>Set up your coach.</h2>
-              <p class="lede">Connect once. Adjust whenever you need.</p>
+              <p class="lede">Your settings save automatically.</p>
             </div>
             <div class="setup-layout">
               <nav class="setup-nav" aria-label="Setup sections">
@@ -569,7 +337,7 @@
                   data-setup="appearance"
                   type="button"
                 >
-                  Floating coach<small>Appearance & placement</small></button
+                  Floating coach<small>Theme & text size</small></button
                 ><button
                   class="setup-tab"
                   data-setup="preferences"
@@ -591,18 +359,6 @@
                   </p>
                   <div class="fields">
                     <label class="field">
-                      <span>Provider</span>
-                      <select id="ai-provider">
-                        <option value="gemini">Google Gemini</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="openrouter">OpenRouter</option>
-                      </select>
-                    </label>
-                    <label class="field">
-                      <span>Model</span>
-                      <select id="coach-model"></select>
-                    </label>
-                    <label class="field">
                       <span>Captions key (Deepgram)</span>
                       <input id="dg-key" type="password" autocomplete="off" />
                     </label>
@@ -616,6 +372,28 @@
                       />
                     </label>
                   </div>
+                  <details class="advanced-setup">
+                    <summary>
+                      Advanced setup <span>Provider &amp; model</span>
+                    </summary>
+                    <p class="help">
+                      Change the service used for reply suggestions. Your
+                      choices save automatically.
+                    </p>
+                    <div class="fields">
+                      <label class="field">
+                        <span>Provider</span>
+                        <select id="ai-provider">
+                          <option value="gemini">Google Gemini</option>
+                          <option value="openai">OpenAI</option>
+                          <option value="openrouter">OpenRouter</option>
+                        </select> </label
+                      ><label class="field">
+                        <span>Model</span>
+                        <select id="coach-model"></select>
+                      </label>
+                    </div>
+                  </details>
                   <p id="ai-status" class="badge" style="margin-top: 16px">
                     Needs attention
                   </p>
@@ -703,31 +481,7 @@
                         <option value="dark">Dark</option>
                       </select>
                     </label>
-                    <label class="field">
-                      <span>Show</span>
-                      <select id="ov-layout">
-                        <option value="both">Conversation and next line</option>
-                        <option value="captions">Conversation only</option>
-                        <option value="suggest">Next line only</option>
-                      </select>
-                    </label>
-                    <label class="field">
-                      <span>Size</span>
-                      <select id="ov-size">
-                        <option value="compact">Compact</option>
-                        <option value="comfortable" selected>
-                          Comfortable
-                        </option>
-                        <option value="large">Large</option>
-                      </select>
-                    </label>
-                    <label class="field">
-                      <span>Position</span>
-                      <select id="ov-position">
-                        <option value="top">Top of screen</option>
-                        <option value="bottom">Bottom of screen</option>
-                      </select>
-                    </label>
+
                     <label class="field full">
                       <span>Text size <b id="ov-font-label">100%</b></span>
                       <input
@@ -737,17 +491,6 @@
                         max="150"
                         step="5"
                         value="100"
-                      />
-                    </label>
-                    <label class="field full">
-                      <span>Background <b id="ov-opacity-label">88%</b></span>
-                      <input
-                        id="ov-opacity"
-                        type="range"
-                        min="50"
-                        max="96"
-                        step="2"
-                        value="88"
                       />
                     </label>
                   </div>
@@ -769,16 +512,6 @@
                       <small
                         >On by default. Uncheck only if you want to press
                         Suggest reply yourself.</small
-                      >
-                    </span>
-                  </label>
-                  <label class="check">
-                    <input id="click-through" type="checkbox" />
-                    <span>
-                      Click through the overlay
-                      <small
-                        >Clicks pass to the call app underneath. Turn off to use
-                        the overlay buttons.</small
                       >
                     </span>
                   </label>

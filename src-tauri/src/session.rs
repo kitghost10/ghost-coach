@@ -5,7 +5,7 @@ use crate::coach::CoachSettings;
 use crate::engine::Engine;
 use crate::events::{CoachEvt, Meters, SessionUi, StatusEvt, TranscriptEvt};
 use crate::live::LiveEvent;
-use crate::overlay_win::{set_click_through, set_overlay_visible};
+use crate::overlay_win::set_overlay_visible;
 use crate::preview::{start_meter_preview, stop_meter_preview};
 use crate::record;
 use std::fs;
@@ -159,7 +159,6 @@ pub fn start_listening(
         auto_answer: auto_on,
         coach_ready: coach_cfg.enabled(),
     };
-    let _ = set_click_through(app.clone(), false);
     let _ = app.emit("session-ui", session_ui.clone());
 
     set_overlay_visible(&app, true);

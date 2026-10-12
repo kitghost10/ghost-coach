@@ -12,7 +12,7 @@ Ghost Coach is a desktop call coach. It captures your microphone and the prospec
 
    Linux audio capture uses ALSA for the microphone and a PulseAudio monitor source for system audio. PipeWire works when its PulseAudio compatibility service is enabled. The pulseaudio-utils package provides the pactl and parec commands used to find and read the monitor source.
 
-   On Wayland, the launcher uses XWayland when it is available so the coach can honor its top/bottom placement. To force the native Wayland backend, run GDK_BACKEND=wayland ./start.sh; the compositor may then ignore the overlay's requested position.
+   On Wayland, the launcher uses XWayland when it is available so the coach can honor its placement above the call. To force the native Wayland backend, run GDK_BACKEND=wayland ./start.sh; the compositor may then ignore the overlay's requested position.
 
 2. Build and update the local launcher binary:
 
@@ -36,6 +36,15 @@ Install Node.js and Rust, then run npm.cmd install and npm.cmd run tauri -- dev 
 
 ## First call
 
-Use a headset, add a Deepgram API key in Settings, verify the microphone and system-audio meters, then start a session. An AI provider key is optional; without one, captions still work but reply suggestions are disabled. Stop the session when finished.
+Use a headset, add a Deepgram API key in Setup, verify the microphone and system-audio meters, then start a session. An AI provider key is optional; without one, captions still work but reply suggestions are disabled. Stop the session when finished.
 
 Deepgram processes live audio while a session is running. Saved transcripts and audio remain in the local application data folder.
+
+## Core workflow
+
+1. **Prepare:** enter a prospect name, call goal, and short brief.
+2. **Coach:** start coaching, then use your calling app as usual. Read captions and suggested replies in the main window or floating coach.
+3. **Save:** end the session to save the recording and transcript.
+4. **Review:** open Call library to listen to the recording or copy the transcript.
+
+Setup shows the two connection keys first. Provider and model choices are available under **Advanced setup**. Floating-coach preferences are limited to light/dark theme and text size. Older configuration files load automatically; retired overlay preferences are dropped when settings are saved.
