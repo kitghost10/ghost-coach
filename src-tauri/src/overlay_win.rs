@@ -18,7 +18,7 @@ pub fn place_overlay(win: &WebviewWindow) -> Result<(), String> {
     let origin = monitor.position();
     let screen = monitor.size();
     let scale = monitor.scale_factor();
-    let (logical_w, logical_h, max_h) = (1080.0, 420.0, 0.42);
+    let (logical_w, logical_h, max_h) = (1240.0, 480.0, 0.48);
 
     let width = ((logical_w * scale) as u32).min((screen.width as f64 * 0.92) as u32);
     let height = ((logical_h * scale) as u32).min((screen.height as f64 * max_h) as u32);
