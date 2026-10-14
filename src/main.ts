@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import plumbingPlaybook from "../playbooks/plumbing.json";
 
 type CallMeta = {
   id: string;
@@ -359,6 +360,19 @@ function render() {
   setLiveUi();
 }
 
+type Playbook = {
+  name: string;
+  offer: string;
+  discovery: string[];
+};
+
+const playbook = plumbingPlaybook as Playbook;
+const PLUMBING_BRIEF = [
+  `Playbook: ${playbook.name}`,
+  `Offer: ${playbook.offer}`,
+  `Discovery questions to work through (one at a time, skip any already answered): ${playbook.discovery.join(" | ")}`,
+].join("\n");
+
 function prospectBrief() {
   const brief = {
     name: prospectName.value.trim(),
@@ -371,16 +385,18 @@ function prospectBrief() {
 
 function briefForCoach() {
   const brief = prospectBrief();
+  const isPlumbing = brief.objective === "Plumbing sales call";
   const parts = [
-    brief.name && `Prospect/business: ${brief.name}`,
-    `Goal: ${brief.objective}`,
+    isPlumbing && PLUMBING_BRIEF,
+    brief.name && `Business: ${brief.name}`,
+    `Call type: ${brief.objective}`,
     brief.objective === "General meeting" &&
       brief.topic &&
       `Meeting topic: ${brief.topic}`,
     brief.notes && `Context: ${brief.notes}`,
-    brief.objective === "General meeting"
-      ? "This is a general (non-sales) meeting. Coach only if the caller asks; otherwise help with clarity, note-taking, and follow-ups."
-      : "Suggest questions and lines that move this sales call forward.",
+    isPlumbing
+      ? "Suggest the next line from the playbook: work through discovery first, then present the offer, handle objections, and close on a concrete next step."
+      : "This is a general (non-sales) meeting. Coach only if the caller asks; otherwise help with clarity, note-taking, and follow-ups.",
   ].filter(Boolean);
   return parts.join(" | ");
 }
@@ -964,7 +980,15 @@ async function initTauri() {
     const brief = JSON.parse(localStorage.getItem(PROSPECT_KEY) || "{}");
     prospectName.value = brief.name || "";
 
-    callObjective.value = brief.objective || callObjective.value;
+    // Old saves had six sales goals; every non-general goal now maps to
+    // the plumbing playbook mode.
+    const savedGoal: string = brief.objective || "";
+    callObjective.value =
+      savedGoal === "General meeting"
+        ? "General meeting"
+        : savedGoal
+          ? "Plumbing sales call"
+          : callObjective.value;
     meetingTopic.value = brief.topic || "";
     prospectNotes.value = brief.notes || "";
   } catch {
