@@ -89,7 +89,9 @@ const meetingTopicField = document.querySelector(
 const meetingTopic = document.querySelector(
   "#meeting-topic",
 ) as HTMLInputElement;
-const briefAbout = document.querySelector("#brief-about") as HTMLTextAreaElement;
+const briefAbout = document.querySelector(
+  "#brief-about",
+) as HTMLTextAreaElement;
 const briefPoints = document.querySelector(
   "#brief-points",
 ) as HTMLTextAreaElement;
@@ -330,9 +332,11 @@ function setLiveUi() {
     pageTitle.textContent = live ? "Live call" : "New call";
   document.getElementById("live-prospect")!.textContent =
     prospectName.value || "Current conversation";
-  [prospectName, callObjective, prospectNotes, meetingTopic].forEach((field) => {
-    field.disabled = live;
-  });
+  [prospectName, callObjective, prospectNotes, meetingTopic].forEach(
+    (field) => {
+      field.disabled = live;
+    },
+  );
   updateReadiness();
 }
 
@@ -443,6 +447,19 @@ async function startSession() {
     );
     const k = keys();
     await invoke("save_config", k);
+    live = true;
+    justFinished = false;
+    document.getElementById("live-feed")!.innerHTML =
+      '<p class="help">Captions appear as you and the prospect speak.</p>';
+    document.getElementById("live-answer")!.textContent =
+      "Your coach will suggest a line after the prospect speaks.";
+    document.getElementById("live-coach-state")!.textContent =
+      "Waiting for the prospect";
+    document.getElementById("live-intent")!.textContent = "Listening";
+    document.getElementById("live-goal")!.textContent =
+      "Listen first. Keep the conversation natural.";
+    setStatus("Connecting captions…", true);
+    render();
     await invoke("start_listening", {
       deepgramKey: k.deepgramKey,
       openaiKey: k.openaiKey,
@@ -459,20 +476,9 @@ async function startSession() {
           ? playbook.discovery
           : null,
     });
-    live = true;
-    justFinished = false;
-    document.getElementById("live-feed")!.innerHTML =
-      '<p class="help">Captions appear as you and the prospect speak.</p>';
-    document.getElementById("live-answer")!.textContent =
-      "Your coach will suggest a line after the prospect speaks.";
-    document.getElementById("live-coach-state")!.textContent =
-      "Waiting for the prospect";
-    document.getElementById("live-intent")!.textContent = "Listening";
-    document.getElementById("live-goal")!.textContent =
-      "Listen first. Keep the conversation natural.";
-    setStatus("Connecting captions…", true);
-    render();
   } catch (error) {
+    live = false;
+    render();
     showError(error);
   } finally {
     startCall.disabled = false;
@@ -554,7 +560,10 @@ async function savePostCallBrief() {
     return;
   }
   try {
-    await invoke("save_call_brief", { id: selectedCall, brief: currentBrief() });
+    await invoke("save_call_brief", {
+      id: selectedCall,
+      brief: currentBrief(),
+    });
     briefSaved.textContent = "Brief saved ✓";
   } catch (error) {
     briefSaved.textContent = "";
@@ -1010,3 +1019,7 @@ async function initTauri() {
 
 render();
 initTauri().catch(showError);
+
+document.getElementById("preview-coach")!.addEventListener("click", () => {
+  invoke("show_overlay").catch(showError);
+});

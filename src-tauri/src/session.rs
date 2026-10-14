@@ -88,9 +88,9 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub fn start_listening(
+pub async fn start_listening(
     app: AppHandle,
-    engine: State<Engine>,
+    engine: State<'_, Engine>,
     deepgram_key: String,
     openai_key: String,
     openai_model: String,
@@ -112,6 +112,7 @@ pub fn start_listening(
     if !engine.stop.load(Ordering::Relaxed) {
         return Err("Already listening.".into());
     }
+    set_overlay_visible(&app, true)?;
     engine.stop.store(false, Ordering::Relaxed);
     engine.you_talking.store(false, Ordering::Relaxed);
     let session_gen = engine.session_gen.clone();
@@ -171,7 +172,6 @@ pub fn start_listening(
     };
     let _ = app.emit("session-ui", session_ui.clone());
 
-    set_overlay_visible(&app, true);
     tauri::async_runtime::spawn(async move {
         let _ = app.emit("session-ui", session_ui);
         let _ = app.emit(
@@ -199,18 +199,19 @@ pub fn start_listening(
         let still_current = session_gen.load(Ordering::Relaxed) == gen;
         if still_current {
             start_meter_preview(handle.clone(), handle.state::<Engine>().preview_stop.clone());
-            set_overlay_visible(&handle, false);
+            handle.state::<Engine>().stop.store(true, Ordering::Relaxed);
             match result {
                 Err(err) => {
                     let _ = app.emit(
                         "status",
                         StatusEvt {
-                            text: format!("{err:#}"),
+                            text: format!("Session failed: {err:#}"),
                             live: false,
                         },
                     );
                 }
                 Ok(()) => {
+                    let _ = set_overlay_visible(&handle, false);
                     let _ = app.emit(
                         "status",
                         StatusEvt {
@@ -230,7 +231,7 @@ pub fn start_listening(
 #[tauri::command]
 pub fn stop_listening(app: AppHandle, engine: State<Engine>) -> Result<(), String> {
     engine.stop.store(true, Ordering::Relaxed);
-    set_overlay_visible(&app, false);
+    set_overlay_visible(&app, false)?;
     let _ = app.emit(
         "status",
         StatusEvt {
@@ -571,6 +572,10 @@ async fn run_session(
     if session_gen.load(Ordering::Relaxed) == gen {
         stop.store(true, Ordering::Relaxed);
     }
+    drop(_keep_you_dg);
+    drop(_keep_them_dg);
+    drop(_keep_you_rec);
+    drop(_keep_them_rec);
     transcribe_you.abort();
     transcribe_them.abort();
     let _ = you_h.join();

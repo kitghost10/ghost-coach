@@ -246,6 +246,19 @@ async function initTauri() {
       }
     } else {
       reset();
+      if (event.payload.text.startsWith("Session failed:")) {
+        liveBadge.textContent = "NOT RECORDING";
+        setCoachState("error");
+        setAnswer(
+          "The session could not start. Check Setup in the main window, then try again.",
+        );
+        needEl.textContent = event.payload.text.replace(
+          /^Session failed:\s*/,
+          "",
+        );
+        goalEl.textContent =
+          "This coach stays visible so you can see what needs fixing.";
+      }
     }
   });
 

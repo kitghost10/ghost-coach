@@ -15,4 +15,4 @@ if [[ -n "${WAYLAND_DISPLAY:-}" && -n "${DISPLAY:-}" && -z "${GDK_BACKEND:-}" ]]
   export GDK_BACKEND=x11
 fi
 
-exec ./bin/sonic-sales
+exec ./bin/sonic-sales "$@"

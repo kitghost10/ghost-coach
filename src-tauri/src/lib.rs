@@ -47,6 +47,17 @@ pub fn run() {
                 let _ = overlay.hide();
             }
 
+            if std::env::args().any(|arg| arg == "--preview-coach") {
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    // Let the webview load before showing its idle preview.
+                    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                    if let Err(error) = overlay_win::set_overlay_visible(&handle, true) {
+                        eprintln!("Floating coach: {error}");
+                    }
+                });
+            }
+
             start_meter_preview(
                 app.handle().clone(),
                 app.state::<Engine>().preview_stop.clone(),

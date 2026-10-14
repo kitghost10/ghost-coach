@@ -48,3 +48,7 @@ Deepgram processes live audio while a session is running. Saved transcripts and 
 4. **Review:** open Call library to listen to the recording or copy the transcript.
 
 Connections contains a Deepgram API key, an OpenRouter API key, and a blank model field for entering the full OpenRouter model ID. Floating-coach preferences are limited to light/dark theme and text size. Older configuration files load automatically; retired overlay preferences are dropped when settings are saved.
+
+## Floating coach troubleshooting
+
+Use **Preview floating coach** on New call to show the overlay without starting a recording or connecting to a provider. The same preview is available with `./start.sh --preview-coach`. Starting coaching raises the floating window on the same screen as the main app. If audio or transcription fails, the coach remains visible with the error; fix the connection or audio setup in the main window and start again.
