@@ -1,9 +1,11 @@
+use crate::coach;
+use crate::engine::Engine;
 use crate::record;
 use crate::record::CallMeta;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 fn default_provider() -> String {
@@ -102,6 +104,74 @@ pub fn list_calls(app: AppHandle) -> Result<Vec<CallMeta>, String> {
 #[tauri::command]
 pub fn load_call(app: AppHandle, id: String) -> Result<record::CallDetail, String> {
     record::load_call(&data_dir(&app)?, &id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_call_brief(
+    app: AppHandle,
+    id: String,
+    brief: record::PostCallBrief,
+) -> Result<record::PostCallBrief, String> {
+    let dir = record::call_dir(&data_dir(&app)?, &id).map_err(|e| e.to_string())?;
+    record::save_brief(&dir, &brief).map_err(|e| e.to_string())?;
+    Ok(brief)
+}
+
+#[tauri::command]
+pub fn generate_call_recap(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+    id: String,
+) -> Result<(), String> {
+    let settings = engine
+        .coach
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "No coach connection saved. Start and end a call first.".to_string())?;
+    let detail = record::load_call(&data_dir(&app)?, &id).map_err(|e| e.to_string())?;
+    let mut history: Vec<String> = detail
+        .entries
+        .iter()
+        .filter(|entry| entry.role != "coach")
+        .map(|entry| {
+            let who = if entry.role == "you" { "You" } else { "Prospect" };
+            format!("{who}: {}", entry.text)
+        })
+        .collect();
+    if history.is_empty() {
+        return Err("This call has no transcript to summarize yet.".into());
+    }
+    if history.len() > 120 {
+        history = history.split_off(history.len() - 120);
+    }
+    let app_c = app.clone();
+    let id_c = id.clone();
+    let base = data_dir(&app).map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn(async move {
+        let result = coach::recap(&settings, &history).await;
+        let dir = match record::call_dir(&base, &id_c) {
+            Ok(dir) => dir,
+            Err(_) => return,
+        };
+        let saved = record::load_brief(&dir).unwrap_or_default();
+        let brief = match result {
+            Ok(out) => record::PostCallBrief {
+                about: out.about,
+                key_points: out.key_points,
+                next_step: out.next_step,
+                user_note: saved.user_note,
+                generated: true,
+            },
+            Err(err) => {
+                let _ = app_c.emit("brief-updated", (id_c, err.to_string()));
+                return;
+            }
+        };
+        let _ = record::save_brief(&dir, &brief);
+        let _ = app_c.emit("brief-updated", (id_c, None::<String>));
+    });
+    Ok(())
 }
 
 #[tauri::command]

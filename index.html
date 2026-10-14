@@ -116,8 +116,16 @@
                       <option>Sell Google lead generation</option>
                       <option>Sell an AI receptionist</option>
                       <option>Qualify the opportunity</option>
+                      <option>General meeting</option>
                     </select></label
                   >
+                  <label class="field hidden" id="meeting-topic-field"
+                    ><span>What is the meeting about?</span
+                    ><input
+                      id="meeting-topic"
+                      placeholder="e.g. Weekly project sync with the client"
+                      autocomplete="off"
+                  /></label>
                   <label class="field full"
                     ><span>What should your coach know?</span
                     ><textarea
@@ -306,6 +314,61 @@
                 Copy transcript
               </button>
             </div>
+
+            <article id="brief-card" class="card brief-card">
+              <div class="section-heading">
+                <div>
+                  <span class="eyebrow">POST-CALL BRIEF</span>
+                  <h3>What was this meeting about?</h3>
+                </div>
+                <button
+                  id="regen-brief"
+                  class="text-button"
+                  type="button"
+                  title="Rewrite the summary from the transcript"
+                >
+                  ↻ Rewrite with AI
+                </button>
+              </div>
+              <p id="brief-status" class="help hidden"></p>
+              <div class="fields">
+                <label class="field full"
+                  ><span>Meeting about</span
+                  ><textarea
+                    id="brief-about"
+                    rows="2"
+                    placeholder="What was discussed…"
+                  ></textarea
+                ></label>
+                <label class="field full"
+                  ><span>Key points</span
+                  ><textarea
+                    id="brief-points"
+                    rows="4"
+                    placeholder="One point per line…"
+                  ></textarea
+                ></label>
+                <label class="field full"
+                  ><span>Next step</span
+                  ><input
+                    id="brief-next"
+                    placeholder="The follow-up action…"
+                /></label>
+                <label class="field full"
+                  ><span>Your note</span
+                  ><textarea
+                    id="brief-note"
+                    rows="2"
+                    placeholder="Your own takeaways or reminders…"
+                  ></textarea
+                ></label>
+              </div>
+              <div class="brief-actions">
+                <button id="save-brief" class="btn" type="button">
+                  Save brief</button
+                ><span id="brief-saved" class="help" aria-live="polite"></span>
+              </div>
+            </article>
 
             <div id="transcript-body" class="transcript"></div>
           </section>

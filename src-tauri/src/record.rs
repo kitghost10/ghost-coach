@@ -68,6 +68,43 @@ pub struct CallDetail {
     pub transcript: String,
     #[serde(default)]
     pub entries: Vec<Entry>,
+    #[serde(default)]
+    pub brief: PostCallBrief,
+}
+
+/// Post-call brief: what the meeting was about, and what happens next.
+/// `summary`/`key_points`/`next_step` come from the AI recap; `user_note`
+/// is the human-written part that is never overwritten by the AI.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PostCallBrief {
+    #[serde(default)]
+    pub about: String,
+    #[serde(default)]
+    pub key_points: Vec<String>,
+    #[serde(default)]
+    pub next_step: String,
+    #[serde(default)]
+    pub user_note: String,
+    #[serde(default)]
+    pub generated: bool,
+}
+
+fn brief_path(dir: &PathBuf) -> PathBuf {
+    dir.join("brief.json")
+}
+
+pub fn load_brief(dir: &PathBuf) -> Option<PostCallBrief> {
+    fs::read_to_string(brief_path(dir))
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+}
+
+pub fn save_brief(dir: &PathBuf, brief: &PostCallBrief) -> Result<()> {
+    fs::write(
+        brief_path(dir),
+        serde_json::to_string_pretty(brief).context("serialize brief")?,
+    )
+    .context("write brief")
 }
 
 pub fn calls_dir(base: &PathBuf) -> Result<PathBuf> {
@@ -320,7 +357,17 @@ pub fn load_call(base: &PathBuf, id: &str) -> Result<CallDetail> {
         meta,
         transcript,
         entries,
+        brief: load_brief(&dir).unwrap_or_default(),
     })
+}
+
+pub fn call_dir(base: &PathBuf, id: &str) -> Result<PathBuf> {
+    let dir = calls_dir(base)?.join(id);
+    anyhow::ensure!(
+        dir.exists(),
+        "No saved call with that id."
+    );
+    Ok(dir)
 }
 
 pub fn call_wav_path(base: &PathBuf, id: &str) -> PathBuf {
@@ -329,4 +376,45 @@ pub fn call_wav_path(base: &PathBuf, id: &str) -> PathBuf {
     p.push(id);
     p.push("call.wav");
     p
+}
+
+#[cfg(test)]
+mod brief_tests {
+    use super::{load_brief, save_brief, PostCallBrief};
+    use std::fs;
+    use std::path::PathBuf;
+
+    #[test]
+    fn brief_round_trips_through_disk() {
+        let dir = PathBuf::from(std::env::temp_dir().join(format!(
+            "ghost-coach-test-{}",
+            std::process::id()
+        )));
+        fs::create_dir_all(&dir).unwrap();
+        let brief = PostCallBrief {
+            about: "Weekly sync about the website rebuild".into(),
+            key_points: vec!["Launch moved to Friday".into(), "Budget confirmed".into()],
+            next_step: "Send the updated quote".into(),
+            user_note: "They prefer email".into(),
+            generated: true,
+        };
+        save_brief(&dir, &brief).unwrap();
+        let loaded = load_brief(&dir).unwrap();
+        assert_eq!(loaded.about, brief.about);
+        assert_eq!(loaded.key_points, brief.key_points);
+        assert_eq!(loaded.next_step, brief.next_step);
+        assert_eq!(loaded.user_note, brief.user_note);
+        assert!(loaded.generated);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn missing_brief_loads_as_none_and_defaults_are_empty() {
+        let dir = PathBuf::from(std::env::temp_dir().join("ghost-coach-test-missing"));
+        fs::remove_dir_all(&dir).ok();
+        assert!(load_brief(&dir).is_none());
+        let brief = PostCallBrief::default();
+        assert!(brief.about.is_empty());
+        assert!(brief.key_points.is_empty());
+    }
 }

@@ -163,8 +163,8 @@ pub fn start_listening(
 
     set_overlay_visible(&app, true);
     tauri::async_runtime::spawn(async move {
-        let _ = handle.emit("session-ui", session_ui);
-        let _ = handle.emit(
+        let _ = app.emit("session-ui", session_ui);
+        let _ = app.emit(
             "status",
             StatusEvt {
                 text: if coach_cfg.enabled() {
@@ -181,7 +181,7 @@ pub fn start_listening(
             you_talking,
             auto_answer,
             dg,
-            coach_cfg,
+            coach_cfg.clone(),
             session_gen.clone(),
             gen,
         )
@@ -192,7 +192,7 @@ pub fn start_listening(
             set_overlay_visible(&handle, false);
             match result {
                 Err(err) => {
-                    let _ = handle.emit(
+                    let _ = app.emit(
                         "status",
                         StatusEvt {
                             text: format!("{err:#}"),
@@ -201,14 +201,15 @@ pub fn start_listening(
                     );
                 }
                 Ok(()) => {
-                    let _ = handle.emit(
+                    let _ = app.emit(
                         "status",
                         StatusEvt {
-                            text: "Call saved. Overlay hidden.".into(),
+                            text: "Call saved. Writing the post-call brief…".into(),
                             live: false,
                         },
                     );
-                    let _ = handle.emit("calls-updated", ());
+                    let _ = app.emit("calls-updated", ());
+                    spawn_auto_recap(handle.clone(), coach_cfg.clone(), gen, session_gen.clone());
                 }
             }
         }
@@ -561,6 +562,87 @@ fn nonempty(passed: String, saved: Option<&str>) -> String {
         return trimmed;
     }
     saved.unwrap_or("").trim().to_string()
+}
+
+/// After a successful session, wait for the recorder to finish flushing and
+/// write an AI post-call brief for the newest call.
+fn spawn_auto_recap(app: AppHandle, coach_cfg: CoachSettings, gen: u64, session_gen: Arc<AtomicU64>) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+        if session_gen.load(Ordering::Relaxed) != gen {
+            return; // a new session started; don't touch its data
+        }
+        let base = match app.path().app_data_dir() {
+            Ok(base) => base,
+            Err(_) => return,
+        };
+        let calls = match record::list_calls(&base) {
+            Ok(calls) => calls,
+            Err(_) => return,
+        };
+        let Some(latest) = calls.first() else {
+            return;
+        };
+        let id = latest.id.clone();
+        let Ok(dir) = record::call_dir(&base, &id) else {
+            return;
+        };
+        let detail = match record::load_call(&base, &id) {
+            Ok(detail) => detail,
+            Err(_) => return,
+        };
+        let mut history: Vec<String> = detail
+            .entries
+            .iter()
+            .filter(|entry| entry.role != "coach")
+            .map(|entry| {
+                let who = if entry.role == "you" { "You" } else { "Prospect" };
+                format!("{who}: {}", entry.text)
+            })
+            .collect();
+        if history.is_empty() {
+            return;
+        }
+        if history.len() > 120 {
+            history = history.split_off(history.len() - 120);
+        }
+        let _ = app.emit(
+            "status",
+            StatusEvt {
+                text: "Writing the post-call brief…".into(),
+                live: false,
+            },
+        );
+        let saved_user_note = record::load_brief(&dir).map(|b| b.user_note).unwrap_or_default();
+        let brief = match coach::recap(&coach_cfg, &history).await {
+            Ok(out) => record::PostCallBrief {
+                about: out.about,
+                key_points: out.key_points,
+                next_step: out.next_step,
+                user_note: saved_user_note,
+                generated: true,
+            },
+            Err(err) => {
+                let _ = app.emit(
+                    "status",
+                    StatusEvt {
+                        text: format!("Post-call brief skipped: {err:#}"),
+                        live: false,
+                    },
+                );
+                return;
+            }
+        };
+        let _ = record::save_brief(&dir, &brief);
+        let _ = app.emit("calls-updated", ());
+        let _ = app.emit(
+            "status",
+            StatusEvt {
+                text: "Call saved. Post-call brief ready in Call review.".into(),
+                live: false,
+            },
+        );
+    });
 }
 
 fn request_coach(

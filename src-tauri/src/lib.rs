@@ -9,7 +9,7 @@ mod preview;
 mod record;
 mod session;
 
-use config::{list_calls, load_call, load_config, open_call_audio, open_calls_folder, save_config};
+use config::{list_calls, load_call, load_config, open_call_audio, open_calls_folder, save_call_brief, save_config, generate_call_recap};
 use engine::Engine;
 use overlay_win::{hide_overlay, set_overlay_prefs, show_overlay};
 use preview::{restart_meter_preview, start_meter_preview};
@@ -34,6 +34,8 @@ pub fn run() {
             stop_listening,
             list_calls,
             load_call,
+            save_call_brief,
+            generate_call_recap,
             open_calls_folder,
             open_call_audio,
             restart_meter_preview

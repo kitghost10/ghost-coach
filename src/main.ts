@@ -21,6 +21,15 @@ type CallDetail = {
   meta: CallMeta;
   transcript: string;
   entries: Entry[];
+  brief: PostCallBrief;
+};
+
+type PostCallBrief = {
+  about: string;
+  key_points: string[];
+  next_step: string;
+  user_note: string;
+  generated: boolean;
 };
 
 type View = "sessions" | "history" | "transcript" | "settings";
@@ -73,6 +82,21 @@ const callObjective = document.querySelector(
 const prospectNotes = document.querySelector(
   "#prospect-notes",
 ) as HTMLTextAreaElement;
+const meetingTopicField = document.querySelector(
+  "#meeting-topic-field",
+) as HTMLElement;
+const meetingTopic = document.querySelector(
+  "#meeting-topic",
+) as HTMLInputElement;
+const briefAbout = document.querySelector("#brief-about") as HTMLTextAreaElement;
+const briefPoints = document.querySelector(
+  "#brief-points",
+) as HTMLTextAreaElement;
+const briefNext = document.querySelector("#brief-next") as HTMLInputElement;
+const briefNote = document.querySelector("#brief-note") as HTMLTextAreaElement;
+const briefStatus = document.querySelector("#brief-status") as HTMLElement;
+const briefSaved = document.querySelector("#brief-saved") as HTMLElement;
+const briefCard = document.querySelector("#brief-card") as HTMLElement;
 
 const views: Record<View, HTMLElement> = {
   sessions: document.querySelector("#view-sessions") as HTMLElement,
@@ -305,7 +329,7 @@ function setLiveUi() {
     pageTitle.textContent = live ? "Live call" : "New call";
   document.getElementById("live-prospect")!.textContent =
     prospectName.value || "Current conversation";
-  [prospectName, callObjective, prospectNotes].forEach((field) => {
+  [prospectName, callObjective, prospectNotes, meetingTopic].forEach((field) => {
     field.disabled = live;
   });
   updateReadiness();
@@ -336,11 +360,34 @@ function render() {
 }
 
 function prospectBrief() {
-  return {
+  const brief = {
     name: prospectName.value.trim(),
     objective: callObjective.value,
     notes: prospectNotes.value.trim(),
+    topic: meetingTopic.value.trim(),
   };
+  return brief;
+}
+
+function briefForCoach() {
+  const brief = prospectBrief();
+  const parts = [
+    brief.name && `Prospect/business: ${brief.name}`,
+    `Goal: ${brief.objective}`,
+    brief.objective === "General meeting" &&
+      brief.topic &&
+      `Meeting topic: ${brief.topic}`,
+    brief.notes && `Context: ${brief.notes}`,
+    brief.objective === "General meeting"
+      ? "This is a general (non-sales) meeting. Coach only if the caller asks; otherwise help with clarity, note-taking, and follow-ups."
+      : "Suggest questions and lines that move this sales call forward.",
+  ].filter(Boolean);
+  return parts.join(" | ");
+}
+
+function syncMeetingTopicField() {
+  const isGeneral = callObjective.value === "General meeting";
+  meetingTopicField.classList.toggle("hidden", !isGeneral);
 }
 
 function saveBrief() {
@@ -390,7 +437,7 @@ async function startSession() {
       openrouterModel: k.openrouterModel,
       aiProvider: k.aiProvider,
       autoAnswer: autoSuggest,
-      prospectBrief: JSON.stringify(prospectBrief()),
+      prospectBrief: briefForCoach(),
     });
     live = true;
     justFinished = false;
@@ -455,8 +502,67 @@ async function showCall(id: string, from: View) {
   transcriptTitle.textContent = callName(detail.meta);
   transcriptSub.textContent = `${formatDate(detail.meta.started_unix)} · ${formatDuration(detail.meta.duration_secs)} · ${detail.meta.line_count} spoken lines · ${suggestions} AI suggestions`;
 
+  fillBriefFields(detail.brief);
   renderEntries(detail);
   showView("transcript");
+}
+
+function fillBriefFields(brief: CallDetail["brief"]) {
+  briefAbout.value = brief.about || "";
+  briefPoints.value = (brief.key_points || []).join("\n");
+  briefNext.value = brief.next_step || "";
+  briefNote.value = brief.user_note || "";
+  briefSaved.textContent = "";
+  briefCard.classList.toggle("hidden", false);
+}
+
+function currentBrief() {
+  return {
+    about: briefAbout.value.trim(),
+    key_points: briefPoints.value
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean),
+    next_step: briefNext.value.trim(),
+    user_note: briefNote.value.trim(),
+    generated: true,
+  };
+}
+
+async function savePostCallBrief() {
+  if (!selectedCall) {
+    return;
+  }
+  try {
+    await invoke("save_call_brief", { id: selectedCall, brief: currentBrief() });
+    briefSaved.textContent = "Brief saved ✓";
+  } catch (error) {
+    briefSaved.textContent = "";
+    showError(error);
+  }
+}
+
+async function regeneratePostCallBrief() {
+  if (!selectedCall) {
+    return;
+  }
+  const button = document.querySelector("#regen-brief") as HTMLButtonElement;
+  button.disabled = true;
+  briefStatus.textContent = "Reading the transcript and writing the brief…";
+  briefStatus.classList.remove("hidden");
+  try {
+    await invoke("save_call_brief", {
+      id: selectedCall,
+      brief: currentBrief(),
+    });
+    await invoke("generate_call_recap", { id: selectedCall });
+  } catch (error) {
+    showError(error);
+    briefStatus.textContent = "";
+    briefStatus.classList.add("hidden");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 startCall.addEventListener("click", () => {
@@ -499,12 +605,13 @@ document.getElementById("review-latest")!.addEventListener("click", () => {
   if (calls[0]) showCall(calls[0].id, "sessions").catch(showError);
 });
 document.getElementById("clear-brief")!.addEventListener("click", () => {
-  [prospectName, prospectNotes].forEach((input) => {
+  [prospectName, prospectNotes, meetingTopic].forEach((input) => {
     input.value = "";
   });
   [callObjective].forEach((select) => {
     select.selectedIndex = 0;
   });
+  syncMeetingTopicField();
   saveBrief();
   justFinished = false;
   setLiveUi();
@@ -559,10 +666,22 @@ function keyboardRow(event: KeyboardEvent) {
 historyRows.addEventListener("keydown", keyboardRow);
 
 historySearch.addEventListener("input", render);
-[prospectName, callObjective, prospectNotes].forEach((el) => {
+[prospectName, callObjective, prospectNotes, meetingTopic].forEach((el) => {
   el?.addEventListener("input", saveBrief);
   el?.addEventListener("change", saveBrief);
 });
+callObjective.addEventListener("change", syncMeetingTopicField);
+[briefAbout, briefPoints, briefNext, briefNote].forEach((el) => {
+  el.addEventListener("input", () => {
+    briefSaved.textContent = "";
+  });
+});
+document
+  .querySelector("#save-brief")
+  ?.addEventListener("click", () => savePostCallBrief().catch(showError));
+document
+  .querySelector("#regen-brief")
+  ?.addEventListener("click", () => regeneratePostCallBrief().catch(showError));
 [dgKey, openrouterKey, openrouterModel].forEach((field) => {
   field.addEventListener("input", () => {
     updateConnectionStatus();
@@ -734,6 +853,24 @@ async function initTauri() {
     refreshCalls().catch(() => undefined);
     window.setTimeout(() => refreshCalls().catch(() => undefined), 250);
   });
+  await listen<[string, string | null]>("brief-updated", (event) => {
+    const [id, error] = event.payload;
+    briefStatus.classList.add("hidden");
+    if (error) {
+      briefStatus.textContent = error;
+      briefStatus.classList.remove("hidden");
+      return;
+    }
+    if (id !== selectedCall) {
+      return;
+    }
+    invoke<CallDetail>("load_call", { id })
+      .then((detail) => {
+        fillBriefFields(detail.brief);
+        setStatus("Post-call brief ready.");
+      })
+      .catch(() => undefined);
+  });
   await listen<{ you: number; them: number }>("meters", (event) => {
     paintMeters(event.payload.you, event.payload.them);
   });
@@ -828,10 +965,12 @@ async function initTauri() {
     prospectName.value = brief.name || "";
 
     callObjective.value = brief.objective || callObjective.value;
+    meetingTopic.value = brief.topic || "";
     prospectNotes.value = brief.notes || "";
   } catch {
     /* ignore invalid local brief */
   }
+  syncMeetingTopicField();
   saveBrief();
   applySavedOverlay(saved.overlay ?? {});
   updateConnectionStatus();
