@@ -1,5 +1,6 @@
 use crate::coach::CoachSettings;
 use crate::config::OverlayPrefs;
+use crate::playbook::QuestionTracker;
 use crate::record;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
@@ -17,6 +18,8 @@ pub struct Engine {
     pub transcript: Arc<Mutex<Vec<record::Entry>>>,
     pub sink: Arc<Mutex<Option<Arc<record::CallSink>>>>,
     pub overlay: Mutex<OverlayPrefs>,
+    pub rolling_summary: Mutex<String>,
+    pub questions: Mutex<QuestionTracker>,
 }
 
 impl Default for Engine {
@@ -34,6 +37,8 @@ impl Default for Engine {
             transcript: Arc::new(Mutex::new(Vec::new())),
             sink: Arc::new(Mutex::new(None)),
             overlay: Mutex::new(OverlayPrefs::default()),
+            rolling_summary: Mutex::new(String::new()),
+            questions: Mutex::new(QuestionTracker::default()),
         }
     }
 }

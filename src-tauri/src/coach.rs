@@ -90,22 +90,206 @@ impl CoachSettings {
 
 const SYSTEM_PROMPT: &str = "Silent sales copilot. JSON only: {\"question\":\"short\",\"answer\":\"one spoken sentence\",\"why\":\"max 6 words\",\"tag\":\"Discovery|Impact|Offer|Objection|Next step|Hold\"}. One concise next line. Never invent pricing or results.";
 
-fn user_prompt(prospect: &str, history: &[String], brief: &str) -> String {
+fn user_prompt(
+    prospect: &str,
+    history: &[String],
+    brief: &str,
+    summary: &str,
+    open_questions: &[String],
+) -> String {
     let recent = history
         .iter()
         .rev()
-        .take(4)
+        .take(8)
         .rev()
         .cloned()
         .collect::<Vec<_>>()
         .join("\n");
+    let memory = if summary.is_empty() {
+        "(nothing yet)".to_string()
+    } else {
+        summary.to_string()
+    };
+    let mut open = String::new();
+    for (i, q) in open_questions.iter().enumerate().take(3) {
+        open.push_str(&format!("{}. {q}\n", i + 1));
+    }
+    let open_block = if open.is_empty() {
+        "(none - every playbook question has been answered)".to_string()
+    } else {
+        open
+    };
     format!(
-        "BRIEF:{brief}\nMEMORY:\n{recent}\nTHEY SAID:\n{prospect}\n\nSALES GUIDANCE:\nPrioritize the next unanswered qualification question. Avoid repeating questions already present in MEMORY. If the prospect raises an objection, acknowledge it briefly before asking one clarifying question. Keep the suggested line natural to say aloud and under 20 words. Move toward a concrete next step when pain, value, authority, budget, and timing are sufficiently clear."
+        "BRIEF:{brief}\nMEMORY (what the whole conversation established so far):\n{memory}\nRECENT LINES:\n{recent}\nTHEY SAID:\n{prospect}\nPLAYBOOK QUESTIONS STILL OPEN:\n{open_block}\n\nSALES GUIDANCE:\nSuggest the next line for the FIRST open playbook question unless the last thing they said needs a response first. Never suggest a question listed as answered or already present in RECENT LINES. If the prospect raises an objection, acknowledge it briefly before asking one clarifying question. Keep the suggested line natural to say aloud and under 20 words. Move toward a concrete next step when pain, value, authority, budget, and timing are sufficiently clear."
     )
 }
 
 pub async fn warmup(settings: &CoachSettings) {
-    let _ = suggest(settings, "Hello", &[], "").await;
+    let _ = suggest(settings, "Hello", &[], "", "", &[]).await;
+}
+
+const SUMMARY_PROMPT: &str = "Conversation memory keeper for a live sales call. You get the running memory so far plus the newest lines. JSON only: {\"summary\":\"3 sentences max: what the prospect has revealed and agreed so far\"}. Carry forward every concrete fact (numbers, names, timelines, pain points) and drop small talk. Never invent facts.";
+
+fn summarize_user_prompt(current: &str, latest_lines: &[String]) -> String {
+    let memory = if current.trim().is_empty() {
+        "(none yet)".to_string()
+    } else {
+        current.trim().to_string()
+    };
+    let lines = latest_lines.join("\n");
+    format!(
+        "CURRENT MEMORY:\n{memory}\nNEWEST LINES:\n{lines}\n\nMerge the newest lines into the memory. Keep it under 90 words."
+    )
+}
+
+fn parse_summary(raw: &str) -> Result<String> {
+    let trimmed = raw
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+    let parsed: Value = serde_json::from_str(trimmed)
+        .map_err(|_| anyhow::anyhow!("summary response was not valid JSON"))?;
+    Ok(parsed
+        .get("summary")
+        .and_then(|x| x.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string())
+}
+
+/// Rewrite the running memory so far. Mechanical fallback merges the old
+/// summary with the newest lines when no AI key is configured.
+pub async fn summarize(settings: &CoachSettings, current: &str, latest_lines: &[String]) -> String {
+    if settings.enabled() && !latest_lines.is_empty() {
+        let result = match settings.provider.as_str() {
+            "openai" => summarize_openai(settings, current, latest_lines).await,
+            "openrouter" => summarize_openrouter(settings, current, latest_lines).await,
+            _ => summarize_gemini(settings, current, latest_lines).await,
+        };
+        if let Ok(text) = result {
+            if !text.trim().is_empty() {
+                return text.trim().to_string();
+            }
+        }
+    }
+    summarize_offline(current, latest_lines)
+}
+
+fn summarize_offline(current: &str, latest_lines: &[String]) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    parts.extend(
+        latest_lines
+            .iter()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty()),
+    );
+    let merged = parts.join(" ");
+    // Hard cap so the fallback cannot grow without bound.
+    match merged.char_indices().nth(700) {
+        Some((idx, _)) => merged[..idx].to_string(),
+        None => merged,
+    }
+}
+
+async fn summarize_openai(
+    settings: &CoachSettings,
+    current: &str,
+    latest_lines: &[String],
+) -> Result<String> {
+    let body = json!({
+        "model": settings.openai_model(),
+        "temperature": 0.1,
+        "max_tokens": 140,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            { "role": "system", "content": SUMMARY_PROMPT },
+            { "role": "user", "content": summarize_user_prompt(current, latest_lines) }
+        ]
+    });
+    let res = http()
+        .post("https://api.openai.com/v1/chat/completions")
+        .bearer_auth(&settings.openai_key)
+        .json(&body)
+        .send()
+        .await?;
+    let status = res.status();
+    let v: Value = res.json().await?;
+    if !status.is_success() {
+        bail!("openai HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+    }
+    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    parse_summary(content)
+}
+
+async fn summarize_openrouter(
+    settings: &CoachSettings,
+    current: &str,
+    latest_lines: &[String],
+) -> Result<String> {
+    let body = json!({
+        "model": settings.openrouter_model()?,
+        "temperature": 0.1,
+        "max_tokens": 140,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            { "role": "system", "content": SUMMARY_PROMPT },
+            { "role": "user", "content": summarize_user_prompt(current, latest_lines) }
+        ]
+    });
+    let res = http()
+        .post("https://openrouter.ai/api/v1/chat/completions")
+        .timeout(Duration::from_secs(20))
+        .bearer_auth(&settings.openrouter_key)
+        .header("HTTP-Referer", "https://sonicsales.app")
+        .header("X-Title", "Ghost Coach")
+        .json(&body)
+        .send()
+        .await?;
+    let status = res.status();
+    let v: Value = res.json().await?;
+    if !status.is_success() {
+        bail!("openrouter HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+    }
+    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    parse_summary(content)
+}
+
+async fn summarize_gemini(
+    settings: &CoachSettings,
+    current: &str,
+    latest_lines: &[String],
+) -> Result<String> {
+    let prompt = format!(
+        "{SUMMARY_PROMPT}\n\n{}",
+        summarize_user_prompt(current, latest_lines)
+    );
+    let body = json!({
+        "contents": [{ "role": "user", "parts": [{ "text": prompt }] }],
+        "generationConfig": {
+            "temperature": 0.1,
+            "maxOutputTokens": 140,
+            "responseMimeType": "application/json"
+        }
+    });
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+        settings.gemini_models()[0], settings.google_api_key
+    );
+    let res = http().post(&url).json(&body).send().await?;
+    let status = res.status();
+    let v: Value = res.json().await?;
+    if !status.is_success() {
+        bail!("gemini HTTP {status}");
+    }
+    let text = v["candidates"][0]["content"]["parts"][0]["text"]
+        .as_str()
+        .unwrap_or("{}");
+    parse_summary(text)
 }
 
 const RECAP_PROMPT: &str = "Meeting recap writer. JSON only: {\"about\":\"one sentence: what this meeting was about\",\"key_points\":[\"up to 5 short points, each under 18 words\"],\"next_step\":\"the single clearest follow-up action, or 'No clear next step was agreed'\"}. Use only what was said; never invent facts.";
@@ -327,18 +511,24 @@ pub async fn suggest(
     prospect: &str,
     history: &[String],
     brief: &str,
+    summary: &str,
+    open_questions: &[String],
 ) -> Result<CoachReply> {
     match settings.provider.as_str() {
-        "openai" => suggest_openai(settings, prospect, history, brief).await,
-        "openrouter" => suggest_openrouter(settings, prospect, history, brief).await,
-        _ => suggest_gemini(settings, prospect, history, brief).await,
+        "openai" => {
+            suggest_openai(settings, prospect, history, brief, summary, open_questions).await
+        }
+        "openrouter" => {
+            suggest_openrouter(settings, prospect, history, brief, summary, open_questions).await
+        }
+        _ => suggest_gemini(settings, prospect, history, brief, summary, open_questions).await,
     }
 }
 
 async fn suggest_openai(
     settings: &CoachSettings,
     prospect: &str,
-    history: &[String], brief: &str,
+    history: &[String], brief: &str, summary: &str, open_questions: &[String],
 ) -> Result<CoachReply> {
     let body = json!({
         "model": settings.openai_model(),
@@ -347,7 +537,7 @@ async fn suggest_openai(
         "response_format": { "type": "json_object" },
         "messages": [
             { "role": "system", "content": SYSTEM_PROMPT },
-            { "role": "user", "content": user_prompt(prospect, history, brief) }
+            { "role": "user", "content": user_prompt(prospect, history, brief, summary, open_questions) }
         ]
     });
     let res = http()
@@ -373,7 +563,7 @@ async fn suggest_openai(
 async fn suggest_openrouter(
     settings: &CoachSettings,
     prospect: &str,
-    history: &[String], brief: &str,
+    history: &[String], brief: &str, summary: &str, open_questions: &[String],
 ) -> Result<CoachReply> {
     let model = settings.openrouter_model()?;
     let mut body = json!({
@@ -383,7 +573,7 @@ async fn suggest_openrouter(
         "response_format": { "type": "json_object" },
         "messages": [
             { "role": "system", "content": SYSTEM_PROMPT },
-            { "role": "user", "content": user_prompt(prospect, history, brief) }
+            { "role": "user", "content": user_prompt(prospect, history, brief, summary, open_questions) }
         ]
     });
     if model.contains("gpt-6") {
@@ -417,9 +607,9 @@ async fn suggest_openrouter(
 async fn suggest_gemini(
     settings: &CoachSettings,
     prospect: &str,
-    history: &[String], brief: &str,
+    history: &[String], brief: &str, summary: &str, open_questions: &[String],
 ) -> Result<CoachReply> {
-    let prompt = format!("{SYSTEM_PROMPT}\n\n{}", user_prompt(prospect, history, brief));
+    let prompt = format!("{SYSTEM_PROMPT}\n\n{}", user_prompt(prospect, history, brief, summary, open_questions));
     let body = json!({
         "contents": [{ "role": "user", "parts": [{ "text": prompt }] }],
         "generationConfig": {

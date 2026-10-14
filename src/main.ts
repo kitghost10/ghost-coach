@@ -454,6 +454,10 @@ async function startSession() {
       aiProvider: k.aiProvider,
       autoAnswer: autoSuggest,
       prospectBrief: briefForCoach(),
+      playbookQuestions:
+        prospectBrief().objective === "Plumbing sales call"
+          ? playbook.discovery
+          : null,
     });
     live = true;
     justFinished = false;

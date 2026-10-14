@@ -6,6 +6,7 @@ use crate::engine::Engine;
 use crate::events::{CoachEvt, Meters, SessionUi, StatusEvt, TranscriptEvt};
 use crate::live::LiveEvent;
 use crate::overlay_win::set_overlay_visible;
+use crate::playbook::QuestionTracker;
 use crate::preview::{start_meter_preview, stop_meter_preview};
 use crate::record;
 use std::fs;
@@ -35,6 +36,8 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
     let said = engine.last_prospect.lock().unwrap().clone();
     let hist = engine.history.lock().unwrap().clone();
     let brief = engine.brief.lock().unwrap().clone();
+    let summary = engine.rolling_summary.lock().map(|s| s.clone()).unwrap_or_default();
+    let open_questions = engine.questions.lock().map(|t| t.remaining()).unwrap_or_default();
     if said.trim().is_empty() {
         let _ = app.emit(
             "coach",
@@ -51,7 +54,7 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
     let log = engine.transcript.clone();
     let log_sink = engine.sink.lock().unwrap().clone();
     tauri::async_runtime::spawn(async move {
-        match coach::suggest(&settings, &said, &hist, &brief).await {
+        match coach::suggest(&settings, &said, &hist, &brief, &summary, &open_questions).await {
             Ok(reply) => {
                 if !reply.answer.is_empty() {
                     let mut lines = log.lock().unwrap();
@@ -98,6 +101,7 @@ pub fn start_listening(
     ai_provider: String,
     auto_answer: Option<bool>,
     prospect_brief: Option<String>,
+    playbook_questions: Option<Vec<String>>,
 ) -> Result<(), String> {
     if deepgram_key.trim().is_empty() {
         return Err("Paste a Deepgram API key first.".into());
@@ -152,6 +156,12 @@ pub fn start_listening(
     *engine.last_prospect.lock().unwrap() = String::new();
     *engine.history.lock().unwrap() = Vec::new();
     *engine.brief.lock().unwrap() = prospect_brief.unwrap_or_default();
+    *engine.rolling_summary.lock().unwrap() = String::new();
+    let questions = playbook_questions.unwrap_or_default();
+    {
+        let mut tracker = engine.questions.lock().unwrap();
+        *tracker = QuestionTracker::new(questions);
+    }
     let auto_on = auto_answer.unwrap_or(true);
     engine.auto_answer.store(auto_on, Ordering::Relaxed);
     let auto_answer = engine.auto_answer.clone();
@@ -357,6 +367,7 @@ async fn run_session(
     *app.state::<Engine>().sink.lock().unwrap() = Some(sink.clone());
     let mut partial = String::new();
     let mut history: Vec<String> = Vec::new();
+    let mut lines_seen = 0usize;
     let mut last_coach = Instant::now() - Duration::from_secs(10);
     let mut last_coached_line = String::new();
     let mut fatal_error: Option<String> = None;
@@ -418,11 +429,61 @@ async fn run_session(
                                 *last = said.clone();
                             }
                         }
-                        if history.len() > 12 {
+                        // Feed the playbook tracker only once per line.
+                        let mut progress_line: Option<String> = None;
+                        if let Ok(mut tracker) = app.state::<Engine>().questions.lock() {
+                            let before = tracker.progress();
+                            tracker.observe(&format!("{label}: {said}"));
+                            let after = tracker.progress();
+                            if after != before && after.0 > 0 && !tracker.is_empty() {
+                                progress_line = Some(format!(
+                                    "Playbook: {}/{} discovery questions answered.",
+                                    after.0, after.1
+                                ));
+                            }
+                        }
+                        if let Some(text) = progress_line {
+                            let _ = app.emit(
+                                "status",
+                                StatusEvt {
+                                    text,
+                                    live: true,
+                                },
+                            );
+                        }
+                        if history.len() > 24 {
                             history.remove(0);
                         }
                         if let Ok(mut hist) = app.state::<Engine>().history.lock() {
                             *hist = history.clone();
+                        }
+                        // Refresh the rolling summary every 12 lines so the
+                        // coach remembers facts that scrolled out of view.
+                        lines_seen += 1;
+                        if lines_seen % 12 == 0 {
+                            let settings = coach_cfg.clone();
+                            let summary_app = app.clone();
+                            let current = app
+                                .state::<Engine>()
+                                .rolling_summary
+                                .lock()
+                                .map(|s| s.clone())
+                                .unwrap_or_default();
+                            let since = history
+                                .iter()
+                                .rev()
+                                .take(12)
+                                .rev()
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            tauri::async_runtime::spawn(async move {
+                                let merged = coach::summarize(&settings, &current, &since).await;
+                                if let Ok(mut summary) = summary_app.state::<Engine>().rolling_summary.lock() {
+                                    if !merged.trim().is_empty() {
+                                        *summary = merged;
+                                    }
+                                }
+                            });
                         }
                         if speaker == "them" && (turn_complete || said.split_whitespace().count() >= 6)
                         {
@@ -437,6 +498,8 @@ async fn run_session(
                                 &coach_tick,
                                 &transcript,
                                 &sink,
+                                &app.state::<Engine>().rolling_summary,
+                                &app.state::<Engine>().questions,
                             );
                         }
                     }
@@ -461,6 +524,8 @@ async fn run_session(
                             &coach_tick,
                             &transcript,
                             &sink,
+                            &app.state::<Engine>().rolling_summary,
+                            &app.state::<Engine>().questions,
                         );
                     }
                     Some(LiveEvent::Warn(msg)) => {
@@ -656,6 +721,8 @@ fn request_coach(
     coach_tick: &Arc<AtomicU64>,
     transcript: &Arc<Mutex<Vec<record::Entry>>>,
     sink: &Arc<record::CallSink>,
+    rolling_summary: &Mutex<String>,
+    questions: &Mutex<QuestionTracker>,
 ) {
     let said = said.trim();
     if said.is_empty() {
@@ -699,6 +766,14 @@ fn request_coach(
     let settings = coach_cfg.clone();
     let hist = history.to_vec();
     let brief = app.state::<Engine>().brief.lock().unwrap().clone();
+    let summary = rolling_summary
+        .lock()
+        .map(|s| s.clone())
+        .unwrap_or_default();
+    let open_questions = questions
+        .lock()
+        .map(|t| t.remaining())
+        .unwrap_or_default();
     let app_c = app.clone();
     let log = transcript.clone();
     let log_sink = sink.clone();
@@ -706,7 +781,7 @@ fn request_coach(
     let req_id = coach_tick.fetch_add(1, Ordering::Relaxed) + 1;
     let coach_tick_c = coach_tick.clone();
     tauri::async_runtime::spawn(async move {
-        match coach::suggest(&settings, &prompt, &hist, &brief).await {
+        match coach::suggest(&settings, &prompt, &hist, &brief, &summary, &open_questions).await {
             Ok(reply) if !reply.answer.is_empty() => {
                 if coach_tick_c.load(Ordering::Relaxed) != req_id {
                     return;

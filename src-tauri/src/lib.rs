@@ -5,6 +5,7 @@ mod engine;
 mod events;
 mod live;
 mod overlay_win;
+mod playbook;
 mod preview;
 mod record;
 mod session;
