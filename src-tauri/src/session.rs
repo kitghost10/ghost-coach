@@ -23,6 +23,41 @@ pub fn set_auto_answer(engine: State<Engine>, enabled: bool) -> Result<(), Strin
 }
 
 #[tauri::command]
+pub async fn polish_line(app: AppHandle, engine: State<'_, Engine>, text: String) -> Result<String, String> {
+    let intent = text.trim().to_string();
+    if intent.is_empty() {
+        return Err("Type what you want to say first.".into());
+    }
+    let settings = match engine.coach.lock().unwrap().clone() {
+        Some(cfg) if cfg.enabled() => cfg,
+        _ => {
+            // No live session (or no keys in it): fall back to saved config.
+            let saved = crate::config::load_config(app.clone()).map_err(|e| e)?;
+            let cfg = CoachSettings {
+                provider: if saved.ai_provider.is_empty() {
+                    "openrouter".into()
+                } else {
+                    saved.ai_provider.to_ascii_lowercase()
+                },
+                google_api_key: saved.google_api_key.clone(),
+                google_model: saved.google_model.clone(),
+                openai_key: saved.openai_key.clone(),
+                openai_model: saved.openai_model.clone(),
+                openrouter_key: saved.openrouter_key.clone(),
+                openrouter_model: saved.openrouter_model.clone(),
+            };
+            if !cfg.enabled() {
+                return Err("Add an AI key in Settings to use the translator.".into());
+            }
+            cfg
+        }
+    };
+    coach::polish(&settings, &intent)
+        .await
+        .map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
 pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), String> {
     let settings = engine
         .coach

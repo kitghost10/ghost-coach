@@ -648,3 +648,75 @@ html[data-theme="dark"] .goal {
   display: block;
   border-radius: 7px;
 }
+
+/* Banglish -> English composer. Lives at the bottom of the suggest column so
+   the polished hero line appears right above it, ready to read aloud. */
+.composer {
+  flex-shrink: 0;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.composer-label {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+#intent-input {
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  padding: 8px 10px;
+}
+#intent-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#polish {
+  margin-left: auto;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+#polish:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.polish-status {
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.polish-status.error {
+  color: #b3423a;
+}
+html[data-theme="dark"] .composer {
+  border-top-color: var(--line);
+}
+html[data-theme="dark"] #intent-input {
+  background: rgba(17, 24, 39, 0.55);
+  color: var(--ink);
+}

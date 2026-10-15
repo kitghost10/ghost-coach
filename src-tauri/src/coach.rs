@@ -292,6 +292,133 @@ async fn summarize_gemini(
     parse_summary(text)
 }
 
+const POLISH_PROMPT: &str = "Line polisher for live sales calls. Input is the speaker's intent, often Banglish (Bengali written in Latin script), sometimes mixed with English or Bengali script. Output ONE polished professional spoken English sentence that keeps the exact intent, tone-appropriate for a confident salesperson. Natural to say aloud, under 30 words. No explanations, no quotes. JSON only: {\"line\":\"...\"}. If the input is already clean English, just polish it lightly.";
+
+fn polish_user_prompt(text: &str) -> String {
+    format!(
+        "INTENT:\n{}\n\nPolish this into one professional spoken English line.",
+        text.trim()
+    )
+}
+
+fn parse_line(raw: &str) -> Result<String> {
+    let trimmed = raw
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+    let parsed: Value = serde_json::from_str(trimmed)
+        .map_err(|_| anyhow::anyhow!("polish response was not valid JSON"))?;
+    Ok(parsed
+        .get("line")
+        .and_then(|x| x.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string())
+}
+
+async fn polish_openai(settings: &CoachSettings, text: &str) -> Result<String> {
+    let body = json!({
+        "model": settings.openai_model(),
+        "temperature": 0.3,
+        "max_tokens": 120,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            { "role": "system", "content": POLISH_PROMPT },
+            { "role": "user", "content": polish_user_prompt(text) }
+        ]
+    });
+    let res = http()
+        .post("https://api.openai.com/v1/chat/completions")
+        .bearer_auth(&settings.openai_key)
+        .json(&body)
+        .send()
+        .await?;
+    let status = res.status();
+    let v: Value = res.json().await?;
+    if !status.is_success() {
+        bail!("openai HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+    }
+    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    parse_line(content)
+}
+
+async fn polish_openrouter(settings: &CoachSettings, text: &str) -> Result<String> {
+    let model = settings.openrouter_model()?;
+    let mut body = json!({
+        "model": model,
+        "temperature": 0.3,
+        "max_tokens": 500,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            { "role": "system", "content": POLISH_PROMPT },
+            { "role": "user", "content": polish_user_prompt(text) }
+        ]
+    });
+    if model.contains("gpt-6") {
+        body["reasoning"] = json!({ "effort": "none" });
+        body["max_completion_tokens"] = json!(500);
+    }
+    let res = http()
+        .post("https://openrouter.ai/api/v1/chat/completions")
+        .timeout(Duration::from_secs(20))
+        .bearer_auth(&settings.openrouter_key)
+        .header("HTTP-Referer", "https://sonicsales.app")
+        .header("X-Title", "Ghost Coach")
+        .json(&body)
+        .send()
+        .await?;
+    let status = res.status();
+    let v: Value = res.json().await?;
+    if !status.is_success() {
+        bail!("openrouter HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+    }
+    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    parse_line(content)
+}
+
+async fn polish_gemini(settings: &CoachSettings, text: &str) -> Result<String> {
+    let prompt = format!("{POLISH_PROMPT}\n\n{}", polish_user_prompt(text));
+    let body = json!({
+        "contents": [{ "role": "user", "parts": [{ "text": prompt }] }],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 120,
+            "responseMimeType": "application/json"
+        }
+    });
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+        settings.gemini_models()[0], settings.google_api_key
+    );
+    let res = http().post(&url).json(&body).send().await?;
+    let status = res.status();
+    let v: Value = res.json().await?;
+    if !status.is_success() {
+        bail!("gemini HTTP {status}");
+    }
+    let text = v["candidates"][0]["content"]["parts"][0]["text"]
+        .as_str()
+        .unwrap_or("{}");
+    parse_line(text)
+}
+
+/// Banglish -> professional spoken English. Uses the live session's coach
+/// settings when one is running, otherwise the saved config keys.
+pub async fn polish(settings: &CoachSettings, text: &str) -> Result<String> {
+    let result = match settings.provider.as_str() {
+        "openai" => polish_openai(settings, text).await,
+        "openrouter" => polish_openrouter(settings, text).await,
+        _ => polish_gemini(settings, text).await,
+    };
+    let line = result?;
+    if line.is_empty() {
+        bail!("The translator returned an empty line.");
+    }
+    Ok(line)
+}
+
 const RECAP_PROMPT: &str = "Meeting recap writer. JSON only: {\"about\":\"one sentence: what this meeting was about\",\"key_points\":[\"up to 5 short points, each under 18 words\"],\"next_step\":\"the single clearest follow-up action, or 'No clear next step was agreed'\"}. Use only what was said; never invent facts.";
 
 fn recap_user_prompt(history: &[String]) -> String {
