@@ -74,7 +74,7 @@ pub fn run() {
                 main.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { .. } = event {
                         if let Some(sink) = sink.lock().unwrap().take() {
-                            sink.flush(&transcript.lock().unwrap());
+                            let _ = sink.flush(&transcript.lock().unwrap());
                         }
                         stop.store(true, Ordering::Relaxed);
                         preview_stop.store(true, Ordering::Relaxed);

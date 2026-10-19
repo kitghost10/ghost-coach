@@ -5,7 +5,7 @@ use std::fs::{self, File};
 use std::io::{BufWriter, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender, SyncSender, TryRecvError};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -133,15 +133,20 @@ pub fn new_call_id() -> (String, u64) {
     (unique_id("call"), started_unix)
 }
 
-pub fn spawn_tee(src: Receiver<Vec<u8>>, dg: SyncSender<Vec<u8>>, rec: SyncSender<Vec<u8>>) {
+pub fn spawn_tee(src: Receiver<Vec<u8>>, dg: Sender<Vec<u8>>, rec: SyncSender<Vec<u8>>) {
     thread::spawn(move || {
+        let mut dg_open = true;
+        let mut rec_open = true;
         while let Ok(chunk) = src.recv() {
-            // Blocking send keeps speech continuous; try_send was dropping frames
-            // under load which made recordings/transcripts sound cracked.
-            if dg.send(chunk.clone()).is_err() {
-                break;
+            // Keep the recording and transcription paths independent. A failed
+            // Deepgram stream must never stop local audio from being saved.
+            if rec_open && rec.send(chunk.clone()).is_err() {
+                rec_open = false;
             }
-            if rec.send(chunk).is_err() {
+            if dg_open && dg.send(chunk).is_err() {
+                dg_open = false;
+            }
+            if !rec_open && !dg_open {
                 break;
             }
         }
@@ -178,6 +183,7 @@ fn mix_to_wav(
     let mut you_open = true;
     let mut them_open = true;
     let started = Instant::now();
+    let mut last_checkpoint = Instant::now();
 
     while !stop.load(Ordering::Relaxed) || !you_q.is_empty() || !them_q.is_empty() || you_open || them_open
     {
@@ -201,6 +207,10 @@ fn mix_to_wav(
             if !stereo.is_empty() {
                 file.write_all(&stereo)?;
                 data_bytes += stereo.len() as u32;
+                if last_checkpoint.elapsed() >= Duration::from_secs(2) {
+                    checkpoint_wav(&mut file, data_bytes)?;
+                    last_checkpoint = Instant::now();
+                }
             }
         } else if stop.load(Ordering::Relaxed) && !you_open && !them_open {
             break;
@@ -211,10 +221,20 @@ fn mix_to_wav(
         }
     }
 
-    file.flush()?;
+    checkpoint_wav(&mut file, data_bytes)?;
     let mut raw = file.into_inner().context("flush wav")?;
+    raw.flush()?;
+    Ok(())
+}
+
+/// Flush recorded samples and rewrite the WAV header so the file is readable
+/// even if the app crashes or the machine loses power mid-call.
+fn checkpoint_wav(file: &mut BufWriter<File>, data_bytes: u32) -> Result<()> {
+    file.flush()?;
+    let raw = file.get_mut();
     raw.seek(SeekFrom::Start(0))?;
     raw.write_all(&wav_header(data_bytes))?;
+    raw.seek(SeekFrom::Start(44 + u64::from(data_bytes)))?;
     Ok(())
 }
 
@@ -262,7 +282,7 @@ pub struct CallSink {
 }
 
 impl CallSink {
-    pub fn flush(&self, entries: &[Entry]) {
+    pub fn flush(&self, entries: &[Entry]) -> Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -289,8 +309,9 @@ impl CallSink {
                 .map(|e| e.text.clone())
                 .unwrap_or_default(),
         };
-        let _ = write_transcript(&self.dir, &record);
-        let _ = write_meta(&self.dir, &meta);
+        write_transcript(&self.dir, &record)?;
+        write_meta(&self.dir, &meta)?;
+        Ok(())
     }
 }
 
@@ -380,9 +401,16 @@ pub fn call_wav_path(base: &PathBuf, id: &str) -> PathBuf {
 
 #[cfg(test)]
 mod brief_tests {
-    use super::{load_brief, save_brief, PostCallBrief};
-    use std::fs;
+    use super::{
+        checkpoint_wav, load_brief, save_brief, spawn_tee, spawn_wav_mixer, wav_header,
+        PostCallBrief, FRAME_BYTES,
+    };
+    use std::fs::{self, File};
+    use std::io::{BufWriter, Write};
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{mpsc, Arc};
+    use std::time::Duration;
 
     #[test]
     fn brief_round_trips_through_disk() {
@@ -416,5 +444,74 @@ mod brief_tests {
         let brief = PostCallBrief::default();
         assert!(brief.about.is_empty());
         assert!(brief.key_points.is_empty());
+    }
+
+    #[test]
+    fn recording_continues_when_transcription_channel_fails() {
+        let (src_tx, src_rx) = mpsc::channel::<Vec<u8>>();
+        let (dg_tx, dg_rx) = mpsc::channel::<Vec<u8>>();
+        let (rec_tx, rec_rx) = mpsc::sync_channel::<Vec<u8>>(4);
+        drop(dg_rx);
+        spawn_tee(src_rx, dg_tx, rec_tx);
+
+        src_tx.send(vec![1, 2, 3]).unwrap();
+        src_tx.send(vec![4, 5, 6]).unwrap();
+        drop(src_tx);
+
+        assert_eq!(
+            rec_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(
+            rec_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
+            vec![4, 5, 6]
+        );
+    }
+
+    #[test]
+    fn wav_mixer_writes_both_sides_and_a_valid_header() {
+        let path = PathBuf::from(std::env::temp_dir().join(format!(
+            "ghost-coach-wav-test-{}.wav",
+            std::process::id()
+        )));
+        fs::remove_file(&path).ok();
+        let (you_tx, you_rx) = mpsc::channel::<Vec<u8>>();
+        let (them_tx, them_rx) = mpsc::channel::<Vec<u8>>();
+        let stop = Arc::new(AtomicBool::new(false));
+        let handle = spawn_wav_mixer(you_rx, them_rx, path.clone(), stop.clone());
+
+        you_tx.send(vec![1u8; FRAME_BYTES]).unwrap();
+        them_tx.send(vec![2u8; FRAME_BYTES]).unwrap();
+        drop(you_tx);
+        drop(them_tx);
+        stop.store(true, Ordering::Relaxed);
+        handle.join().unwrap();
+
+        let wav = fs::read(&path).unwrap();
+        let data_bytes = u32::from_le_bytes(wav[40..44].try_into().unwrap()) as usize;
+        assert_eq!(&wav[0..4], b"RIFF");
+        assert_eq!(&wav[8..12], b"WAVE");
+        assert_eq!(data_bytes, FRAME_BYTES * 2);
+        assert_eq!(wav.len(), 44 + data_bytes);
+        assert_eq!(&wav[44..48], &[1, 1, 2, 2]);
+        fs::remove_file(path).ok();
+    }
+
+    #[test]
+    fn interrupted_recording_still_has_a_readable_header() {
+        let path = PathBuf::from(std::env::temp_dir().join(format!(
+            "ghost-coach-checkpoint-test-{}.wav",
+            std::process::id()
+        )));
+        let mut file = BufWriter::new(File::create(&path).unwrap());
+        file.write_all(&wav_header(0)).unwrap();
+        file.write_all(&[9u8; 8]).unwrap();
+        checkpoint_wav(&mut file, 8).unwrap();
+        drop(file);
+
+        let wav = fs::read(&path).unwrap();
+        assert_eq!(u32::from_le_bytes(wav[40..44].try_into().unwrap()), 8);
+        assert_eq!(wav.len(), 52);
+        fs::remove_file(path).ok();
     }
 }

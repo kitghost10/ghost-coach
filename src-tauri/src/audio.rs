@@ -7,7 +7,7 @@ use std::io::Read;
 #[cfg(target_os = "linux")]
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::{Sender, SyncSender};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -26,7 +26,7 @@ pub enum Ear {
 pub fn spawn_ear(
     ear: Ear,
     stop: Arc<AtomicBool>,
-    pcm_tx: Option<SyncSender<Vec<u8>>>,
+    pcm_tx: Option<Sender<Vec<u8>>>,
     level_tx: SyncSender<(Ear, f32)>,
     error_tx: SyncSender<(Ear, String)>,
 ) -> thread::JoinHandle<()> {
@@ -44,7 +44,7 @@ pub fn spawn_ear(
 fn capture_loop(
     ear: Ear,
     stop: Arc<AtomicBool>,
-    pcm_tx: Option<SyncSender<Vec<u8>>>,
+    pcm_tx: Option<Sender<Vec<u8>>>,
     level_tx: SyncSender<(Ear, f32)>,
 ) -> Result<()> {
     if ear == Ear::Them {
@@ -135,7 +135,7 @@ fn capture_loop(
 #[cfg(target_os = "linux")]
 fn capture_linux_monitor(
     stop: Arc<AtomicBool>,
-    pcm_tx: Option<SyncSender<Vec<u8>>>,
+    pcm_tx: Option<Sender<Vec<u8>>>,
     level_tx: SyncSender<(Ear, f32)>,
 ) -> Result<()> {
     let source = linux_monitor_source()?;
@@ -254,7 +254,7 @@ fn select_linux_monitor(default_sink: &str, sources: &str) -> Option<String> {
 #[cfg(target_os = "windows")]
 fn capture_windows_loopback(
     stop: Arc<AtomicBool>,
-    pcm_tx: Option<SyncSender<Vec<u8>>>,
+    pcm_tx: Option<Sender<Vec<u8>>>,
     level_tx: SyncSender<(Ear, f32)>,
 ) -> Result<()> {
     let hr = initialize_mta();
@@ -354,7 +354,7 @@ fn process_samples(
     resampler: &mut StreamResampler,
     pcm_acc: &mut Vec<f32>,
     last_level: &mut Instant,
-    pcm_tx: &Option<SyncSender<Vec<u8>>>,
+    pcm_tx: &Option<Sender<Vec<u8>>>,
     level_tx: &SyncSender<(Ear, f32)>,
 ) {
     if samples.is_empty() {
@@ -381,7 +381,9 @@ fn process_samples(
         while pcm_acc.len() >= OUT_FRAME {
             let chunk: Vec<f32> = pcm_acc.drain(..OUT_FRAME).collect();
             let pcm16 = f32_to_pcm16(&chunk);
-            if tx.try_send(pcm16).is_err() {
+            // The capture path is unbounded so a slow or stalled transcription
+            // stream can never make us discard recorded call audio.
+            if tx.send(pcm16).is_err() {
                 break;
             }
         }

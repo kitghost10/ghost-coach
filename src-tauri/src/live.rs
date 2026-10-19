@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::sync::mpsc::Receiver;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_tungstenite::connect_async;
 use tungstenite::client::IntoClientRequest;
@@ -67,21 +67,36 @@ channels=1";
 
     let mut keep = tokio::time::interval(Duration::from_secs(8));
     keep.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut drain = tokio::time::interval(Duration::from_millis(100));
+    drain.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut audio_open = true;
+    let mut closing_since: Option<Instant> = None;
 
     loop {
         tokio::select! {
-            _ = keep.tick() => {
+            _ = keep.tick(), if audio_open => {
                 let _ = write.send(Message::Text(r#"{"type":"KeepAlive"}"#.into())).await;
             }
-            chunk = rx.recv() => {
+            chunk = rx.recv(), if audio_open => {
                 match chunk {
                     Some(bytes) => {
                         write.send(Message::Binary(bytes.into())).await?;
                     }
                     None => {
+                        // Ask Deepgram for its final transcript, then keep the
+                        // websocket open briefly so those results are not lost.
+                        audio_open = false;
                         let _ = write.send(Message::Text(r#"{"type":"CloseStream"}"#.into())).await;
-                        break;
+                        closing_since = Some(Instant::now());
                     }
+                }
+            }
+            _ = drain.tick(), if !audio_open => {
+                if closing_since
+                    .map(|started| started.elapsed() >= Duration::from_secs(3))
+                    .unwrap_or(false)
+                {
+                    break;
                 }
             }
             msg = read.next() => {

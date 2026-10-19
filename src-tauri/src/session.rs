@@ -134,7 +134,9 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
                         &reply.tag,
                     ));
                     if let Some(sink) = &log_sink {
-                        sink.flush(&lines);
+                        if let Err(err) = sink.flush(&lines) {
+                            eprintln!("coach suggestion save: {err:#}");
+                        }
                     }
                 }
                 let _ = app_c.emit(
@@ -291,17 +293,23 @@ pub async fn start_listening(
                     let _ = app.emit(
                         "status",
                         StatusEvt {
-                            text: format!("Session failed: {err:#}"),
+                            text: format!(
+                                "Session failed: {err:#} Check the call library for anything already saved."
+                            ),
                             live: false,
                         },
                     );
                 }
-                Ok(()) => {
+                Ok(saved) => {
                     let _ = set_overlay_visible(&handle, false);
                     let _ = app.emit(
                         "status",
                         StatusEvt {
-                            text: "Call saved. Writing the post-call brief…".into(),
+                            text: format!(
+                                "Call saved · {:.1} MB audio · {} transcript lines. Writing the post-call brief…",
+                                saved.audio_bytes as f64 / (1024.0 * 1024.0),
+                                saved.transcript_lines
+                            ),
                             live: false,
                         },
                     );
@@ -328,6 +336,11 @@ pub fn stop_listening(app: AppHandle, engine: State<Engine>) -> Result<(), Strin
     Ok(())
 }
 
+struct SessionSaved {
+    audio_bytes: u64,
+    transcript_lines: usize,
+}
+
 async fn run_session(
     app: AppHandle,
     stop: Arc<AtomicBool>,
@@ -337,7 +350,7 @@ async fn run_session(
     coach_cfg: CoachSettings,
     session_gen: Arc<AtomicU64>,
     gen: u64,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SessionSaved> {
     let data = app
         .path()
         .app_data_dir()
@@ -347,10 +360,13 @@ async fn run_session(
     fs::create_dir_all(&call_dir)?;
     let session_started = Instant::now();
 
-    let (you_cap_tx, you_cap_rx) = mpsc::sync_channel::<Vec<u8>>(256);
-    let (them_cap_tx, them_cap_rx) = mpsc::sync_channel::<Vec<u8>>(256);
-    let (you_dg_tx, you_dg_rx) = mpsc::sync_channel::<Vec<u8>>(256);
-    let (them_dg_tx, them_dg_rx) = mpsc::sync_channel::<Vec<u8>>(256);
+    // Capture and Deepgram queues are unbounded so audio is never discarded
+    // because a network stream is briefly slow. The local WAV writer applies
+    // backpressure to the tee threads instead.
+    let (you_cap_tx, you_cap_rx) = mpsc::channel::<Vec<u8>>();
+    let (them_cap_tx, them_cap_rx) = mpsc::channel::<Vec<u8>>();
+    let (you_dg_tx, you_dg_rx) = mpsc::channel::<Vec<u8>>();
+    let (them_dg_tx, them_dg_rx) = mpsc::channel::<Vec<u8>>();
     let (you_rec_tx, you_rec_rx) = mpsc::sync_channel::<Vec<u8>>(512);
     let (them_rec_tx, them_rec_rx) = mpsc::sync_channel::<Vec<u8>>(512);
     let _keep_you_dg = you_dg_tx.clone();
@@ -411,7 +427,7 @@ async fn run_session(
     });
 
     let (ev_tx, mut ev_rx) = tokio::sync::mpsc::unbounded_channel::<LiveEvent>();
-    let transcribe_you = spawn_labeled_transcriber(
+    let mut transcribe_you = spawn_labeled_transcriber(
         deepgram_key.clone(),
         you_dg_rx,
         ev_tx.clone(),
@@ -419,8 +435,8 @@ async fn run_session(
         "you",
         false,
     );
-    let transcribe_them =
-        spawn_labeled_transcriber(deepgram_key, them_dg_rx, ev_tx, stop.clone(), "them", true);
+    let mut transcribe_them =
+        spawn_labeled_transcriber(deepgram_key, them_dg_rx, ev_tx, stop.clone(), "them", false);
 
     let _ = app.emit(
         "status",
@@ -447,6 +463,7 @@ async fn run_session(
     });
     *app.state::<Engine>().sink.lock().unwrap() = Some(sink.clone());
     let mut partial = String::new();
+    let mut partial_speaker: Option<&'static str> = None;
     let mut history: Vec<String> = Vec::new();
     let mut lines_seen = 0usize;
     let mut last_coach = Instant::now() - Duration::from_secs(10);
@@ -475,6 +492,7 @@ async fn run_session(
                     }
                     Some(LiveEvent::Partial { speaker, text }) => {
                         partial = text;
+                        partial_speaker = Some(speaker);
                         let _ = app.emit(
                             "transcript",
                             TranscriptEvt {
@@ -486,6 +504,7 @@ async fn run_session(
                     }
                     Some(LiveEvent::Final { speaker, text, turn_complete }) => {
                         partial.clear();
+                        partial_speaker = None;
                         let said = text.trim().to_string();
                         if said.is_empty() {
                             continue;
@@ -502,7 +521,15 @@ async fn run_session(
                         {
                             let mut lines = transcript.lock().unwrap();
                             lines.push(record::Entry::new(speaker, said.clone(), ""));
-                            sink.flush(&lines);
+                            if let Err(err) = sink.flush(&lines) {
+                                let _ = app.emit(
+                                    "status",
+                                    StatusEvt {
+                                        text: format!("Transcript save warning: {err:#}"),
+                                        live: true,
+                                    },
+                                );
+                            }
                         }
                         history.push(format!("{label}: {said}"));
                         if speaker == "them" {
@@ -656,21 +683,97 @@ async fn run_session(
     drop(_keep_them_dg);
     drop(_keep_you_rec);
     drop(_keep_them_rec);
-    transcribe_you.abort();
-    transcribe_them.abort();
     let _ = you_h.join();
     let _ = them_h.join();
     let _ = wav_h.join();
-    let entries = transcript.lock().unwrap().clone();
-    if session_gen.load(Ordering::Relaxed) == gen {
-        sink.flush(&entries);
-        *app.state::<Engine>().sink.lock().unwrap() = None;
+
+    // The audio is closed. Give Deepgram a short window to deliver its final
+    // transcript messages before the websocket tasks are stopped.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(4);
+    loop {
+        match tokio::time::timeout_at(deadline, ev_rx.recv()).await {
+            Ok(Some(LiveEvent::Final { speaker, text, .. })) => {
+                let said = text.trim().to_string();
+                if !said.is_empty() {
+                    let mut lines = transcript.lock().unwrap();
+                    lines.push(record::Entry::new(speaker, said, ""));
+                    if let Err(err) = sink.flush(&lines) {
+                        eprintln!("transcript save during final drain: {err:#}");
+                    }
+                    partial.clear();
+                    partial_speaker = None;
+                }
+            }
+            Ok(Some(LiveEvent::Partial { speaker, text })) => {
+                partial = text;
+                partial_speaker = Some(speaker);
+            }
+            Ok(Some(_)) => {}
+            Ok(None) | Err(_) => break,
+        }
     }
+    if tokio::time::timeout(Duration::from_secs(1), &mut transcribe_you)
+        .await
+        .is_err()
+    {
+        transcribe_you.abort();
+    }
+    if tokio::time::timeout(Duration::from_secs(1), &mut transcribe_them)
+        .await
+        .is_err()
+    {
+        transcribe_them.abort();
+    }
+
+    // A websocket can fail mid-utterance. Keep the visible partial rather than
+    // losing the last thing the prospect said.
+    if !partial.trim().is_empty() {
+        let speaker = partial_speaker.unwrap_or("them");
+        let mut lines = transcript.lock().unwrap();
+        lines.push(record::Entry::new(speaker, partial.clone(), "recovered partial"));
+        if let Err(err) = sink.flush(&lines) {
+            eprintln!("transcript save of recovered partial: {err:#}");
+        }
+        partial.clear();
+    }
+
+    let entries = transcript.lock().unwrap().clone();
+    let saved = if session_gen.load(Ordering::Relaxed) == gen {
+        sink.flush(&entries)
+            .map_err(|err| anyhow::anyhow!("Could not save transcript: {err:#}"))?;
+        *app.state::<Engine>().sink.lock().unwrap() = None;
+        let audio_bytes = fs::metadata(call_dir.join("call.wav"))
+            .map(|meta| meta.len())
+            .unwrap_or(0);
+        if audio_bytes <= 44 {
+            anyhow::bail!(
+                "Recording finished, but call.wav is empty. Check the microphone and call-audio devices before the next call."
+            );
+        }
+        let transcript_lines = entries
+            .iter()
+            .filter(|entry| entry.role != "coach")
+            .count();
+        if transcript_lines == 0 {
+            anyhow::bail!(
+                "Audio was saved, but no transcript lines were captured. Check the Deepgram connection."
+            );
+        }
+        SessionSaved {
+            audio_bytes,
+            transcript_lines,
+        }
+    } else {
+        SessionSaved {
+            audio_bytes: 0,
+            transcript_lines: 0,
+        }
+    };
     let _ = session_started;
     if let Some(message) = fatal_error {
         anyhow::bail!(message);
     }
-    Ok(())
+    Ok(saved)
 }
 
 fn spawn_labeled_transcriber(
@@ -908,7 +1011,9 @@ fn request_coach(
                         reply.answer.clone(),
                         &reply.tag,
                     ));
-                    log_sink.flush(&lines);
+                    if let Err(err) = log_sink.flush(&lines) {
+                        eprintln!("coach suggestion save: {err:#}");
+                    }
                 }
                 let _ = app_c.emit(
                     "coach",
