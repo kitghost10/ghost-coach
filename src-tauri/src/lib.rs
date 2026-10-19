@@ -14,7 +14,10 @@ use config::{list_calls, load_call, load_config, open_call_audio, open_calls_fol
 use engine::Engine;
 use overlay_win::{hide_overlay, set_overlay_prefs, show_overlay};
 use preview::{restart_meter_preview, start_meter_preview};
-use session::{generate_answer, polish_line, set_auto_answer, start_listening, stop_listening};
+use session::{
+    generate_answer, generate_answer_for, polish_line, set_auto_answer, start_listening,
+    stop_listening,
+};
 use std::sync::atomic::Ordering;
 use tauri::Manager;
 
@@ -31,6 +34,7 @@ pub fn run() {
             show_overlay,
             set_auto_answer,
             generate_answer,
+            generate_answer_for,
             polish_line,
             start_listening,
             stop_listening,

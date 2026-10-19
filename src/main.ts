@@ -661,23 +661,40 @@ document.getElementById("clear-brief")!.addEventListener("click", () => {
   setLiveUi();
   prospectName.focus();
 });
+async function askCoach(intent?: string) {
+  const buttons = document.querySelectorAll<HTMLButtonElement>(
+    "#live-generate, [data-coach-intent]",
+  );
+  buttons.forEach((button) => {
+    button.disabled = true;
+  });
+  document.getElementById("live-coach-state")!.textContent = "Thinking…";
+  try {
+    if (intent) {
+      await invoke("generate_answer_for", { intent });
+    } else {
+      await invoke("generate_answer");
+    }
+  } catch (error) {
+    document.getElementById("live-coach-state")!.textContent =
+      "Coach unavailable";
+    showError(error);
+  } finally {
+    buttons.forEach((button) => {
+      button.disabled = false;
+    });
+  }
+}
+
 document
   .getElementById("live-generate")!
-  .addEventListener("click", async () => {
-    const button = document.getElementById(
-      "live-generate",
-    ) as HTMLButtonElement;
-    button.disabled = true;
-    document.getElementById("live-coach-state")!.textContent = "Thinking…";
-    try {
-      await invoke("generate_answer");
-    } catch (error) {
-      document.getElementById("live-coach-state")!.textContent =
-        "Coach unavailable";
-      showError(error);
-    } finally {
-      button.disabled = false;
-    }
+  .addEventListener("click", () => askCoach());
+document
+  .querySelectorAll<HTMLButtonElement>("[data-coach-intent]")
+  .forEach((button) => {
+    button.addEventListener("click", () =>
+      askCoach(button.dataset.coachIntent),
+    );
   });
 document
   .querySelector("#back")

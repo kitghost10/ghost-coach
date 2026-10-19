@@ -63,6 +63,24 @@ pub async fn polish_line(
 
 #[tauri::command]
 pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), String> {
+    request_manual_answer(app, engine, None)
+}
+
+#[tauri::command]
+pub fn generate_answer_for(
+    app: AppHandle,
+    engine: State<Engine>,
+    intent: String,
+) -> Result<(), String> {
+    let directive = intent.trim().to_string();
+    request_manual_answer(app, engine, (!directive.is_empty()).then_some(directive))
+}
+
+fn request_manual_answer(
+    app: AppHandle,
+    engine: State<Engine>,
+    directive: Option<String>,
+) -> Result<(), String> {
     let settings = engine
         .coach
         .lock()
@@ -74,7 +92,11 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
     }
     let said = engine.last_prospect.lock().unwrap().clone();
     let hist = engine.history.lock().unwrap().clone();
-    let brief = engine.brief.lock().unwrap().clone();
+    let mut brief = engine.brief.lock().unwrap().clone();
+    if let Some(directive) = &directive {
+        brief.push_str("\nLIVE COACH DIRECTIVE: ");
+        brief.push_str(directive);
+    }
     let summary = engine
         .rolling_summary
         .lock()
@@ -98,7 +120,7 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    if said.trim().is_empty() {
+    if said.trim().is_empty() && directive.is_none() {
         let _ = app.emit(
             "coach",
             CoachEvt {
@@ -110,13 +132,18 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
         );
         return Ok(());
     }
+    let prompt = if said.trim().is_empty() {
+        "No prospect line yet. Follow the live coach directive for the opening line.".to_string()
+    } else {
+        said
+    };
     let app_c = app.clone();
     let log = engine.transcript.clone();
     let log_sink = engine.sink.lock().unwrap().clone();
     tauri::async_runtime::spawn(async move {
         match coach::suggest(
             &settings,
-            &said,
+            &prompt,
             &hist,
             &brief,
             &summary,

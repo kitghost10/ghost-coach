@@ -856,6 +856,49 @@ input[type="checkbox"] {
 .live-suggestion .help {
   margin-bottom: 18px;
 }
+.coach-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+.coach-chip {
+  background: #fff;
+  border: 1px solid #ddd3ef;
+  border-radius: 999px;
+  color: #59496a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  padding: 7px 11px;
+}
+.coach-chip:hover:not(:disabled) {
+  background: #f0e9ff;
+  border-color: #b9a5e5;
+}
+.coach-chip:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+.coach-cheatsheet {
+  border-top: 1px solid #ebe4f6;
+  color: #675b73;
+  font-size: 11px;
+  margin-bottom: 16px;
+  padding-top: 10px;
+}
+.coach-cheatsheet summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.coach-cheatsheet ul {
+  margin: 9px 0 0;
+  padding-left: 18px;
+}
+.coach-cheatsheet li {
+  margin-bottom: 6px;
+}
 @media (max-width: 1100px) {
   .app {
     grid-template-columns: 184px minmax(0, 1fr);
