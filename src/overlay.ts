@@ -18,9 +18,6 @@ const feed = document.querySelector("#feed") as HTMLElement;
 const idle = document.querySelector("#idle") as HTMLElement;
 const autoAnswer = document.querySelector("#auto-answer") as HTMLInputElement;
 const generateBtn = document.querySelector("#generate") as HTMLButtonElement;
-const intentInput = document.querySelector("#intent-input") as HTMLTextAreaElement;
-const polishBtn = document.querySelector("#polish") as HTMLButtonElement;
-const polishStatus = document.querySelector("#polish-status") as HTMLElement;
 
 type CoachState = "idle" | "listening" | "thinking" | "ready" | "error";
 
@@ -225,56 +222,6 @@ document.querySelector("#close")?.addEventListener("click", () => {
   invoke("stop_listening").catch(() => undefined);
 });
 
-/** The polished line replaces the hero answer and must survive the next
-    coach tick for a few seconds, otherwise typing feedback gets wiped
-    before the user has read it. */
-let polishHoldUntil = 0;
-
-async function polishIntent() {
-  const text = intentInput.value.trim();
-  if (!text) {
-    polishStatus.textContent = "Type your intention first.";
-    polishStatus.classList.add("error");
-    return;
-  }
-  polishBtn.disabled = true;
-  intentInput.disabled = true;
-  polishStatus.classList.remove("error");
-  polishStatus.textContent = "Translating…";
-  setCoachState("thinking");
-  try {
-    const line = await invoke<string>("polish_line", { text });
-    setAnswer(line);
-    answerEl.classList.remove("placeholder");
-    intentBadge.textContent = "Polished";
-    goalEl.textContent = "Goal: say your line — polished for you.";
-    needEl.textContent = "";
-    polishStatus.textContent = "";
-    intentInput.value = "";
-    setCoachState("ready");
-    polishHoldUntil = Date.now() + 20_000;
-  } catch (error) {
-    polishStatus.textContent =
-      error instanceof Error ? error.message : String(error);
-    polishStatus.classList.add("error");
-    setCoachState("error");
-  } finally {
-    polishBtn.disabled = false;
-    intentInput.disabled = false;
-    intentInput.focus();
-  }
-}
-
-polishBtn.addEventListener("click", () => {
-  void polishIntent();
-});
-intentInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    void polishIntent();
-  }
-});
-
 try {
   const prefs = JSON.parse(localStorage.getItem("sonic-overlay-prefs") || "{}");
   applyAuto(typeof prefs.autoAnswer === "boolean" ? prefs.autoAnswer : true);
@@ -376,10 +323,6 @@ async function initTauri() {
         intentBadge.textContent = tag;
       }
       if (answer) {
-        // Let a just-polished line stay readable before live coaching takes over.
-        if (Date.now() < polishHoldUntil) {
-          return;
-        }
         setAnswer(answer);
         setCoachState("ready");
         goalEl.textContent = why
