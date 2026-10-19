@@ -55,7 +55,9 @@ impl CoachSettings {
 
     fn openrouter_model(&self) -> Result<String> {
         let model = self.openrouter_model.trim();
-        if model.is_empty() { bail!("Enter an OpenRouter model ID in Connections."); }
+        if model.is_empty() {
+            bail!("Enter an OpenRouter model ID in Connections.");
+        }
         Ok(model.to_string())
     }
 
@@ -88,7 +90,68 @@ impl CoachSettings {
     }
 }
 
-const SYSTEM_PROMPT: &str = "Silent sales copilot. JSON only: {\"question\":\"short\",\"answer\":\"one spoken sentence\",\"why\":\"max 6 words\",\"tag\":\"Discovery|Impact|Offer|Objection|Next step|Hold\"}. One concise next line. Never invent pricing or results.";
+const SALES_SYSTEM_PROMPT: &str = "You are Ghost Coach, a silent live copilot for a consultant selling websites to local service businesses, especially plumbers. Return JSON only: {\"question\":\"short label for what they revealed\",\"answer\":\"the exact next sentence the salesperson should say aloud\",\"why\":\"max 6 words\",\"tag\":\"Rapport|Discovery|Pain|Impact|Vision|Offer|Objection|Close|Hold\"}. Rules: diagnose before prescribing; use the discovery checklist as a map, not a script; ask one question at a time; respond to the prospect's newest line before moving on; if they ask a direct question, answer it in the first sentence; sell outcomes such as more calls, better jobs, trust, and saved time rather than design features; handle objections with curiosity, never argue; ask for a specific next step once the problem and value are clear; never invent prices, rankings, case studies, guarantees, or results; never repeat a question or suggestion already in the transcript. The answer must be natural spoken English under 20 words.";
+
+const GENERAL_SYSTEM_PROMPT: &str = "Silent meeting copilot. Return JSON only: {\"question\":\"short label\",\"answer\":\"the exact next sentence the user should say aloud\",\"why\":\"max 6 words\",\"tag\":\"Discovery|Impact|Offer|Objection|Next step|Hold\"}. Be concise, accurate, and useful. Coach only when helpful; otherwise help with clarity and the next action. Never invent facts, pricing, or results. Keep the answer under 20 words.";
+
+fn is_sales_mode(brief: &str, open_questions: &[String]) -> bool {
+    !open_questions.is_empty()
+        || brief
+            .to_ascii_lowercase()
+            .contains("call type: plumbing sales call")
+}
+
+/// Fast deterministic read on the most common plumber objections. The model
+/// still chooses the final wording; this keeps it from pitching past the issue.
+fn objection_hint(prospect: &str) -> Option<&'static str> {
+    let said = prospect.to_ascii_lowercase();
+    let signals: &[(&[&str], &str)] = &[
+        (
+            &["already have a website", "already got a website", "have a site", "got a site"],
+            "They mentioned an existing site. Ask whether it brings in calls and when it was last updated; do not pitch yet.",
+        ),
+        (
+            &["word of mouth", "word-of-mouth", "referral", "referrals"],
+            "They rely on referrals. Explore slow periods, after-hours calls, and the high-value jobs they want more of; do not attack referrals.",
+        ),
+        (
+            &["too expensive", "too much money", "can't afford", "budget", "price", "pricing", "how much", "cost", "quote"],
+            "Price or budget came up. Do not guess a number; ask which jobs or outcomes matter most, then frame the next step as a scoped proposal.",
+        ),
+        (
+            &["too busy", "no time", "busy season", "slammed"],
+            "They are time-poor. Emphasize a done-for-you process and minimal owner time; do not add pressure.",
+        ),
+        (
+            &["my nephew", "my cousin", "my friend", "my brother", "my son", "someone built", "freelancer"],
+            "Someone they know built the current site. Respect the work and ask what happens when it needs updates, tracking, or ongoing improvements.",
+        ),
+        (
+            &["don't need more", "do not need more", "enough work", "too much work", "fully booked"],
+            "They do not need more volume. Shift to better jobs, stronger trust, and fewer time-wasting enquiries.",
+        ),
+        (
+            &["google", "seo", "ranking", "rank", "search"],
+            "Search or SEO came up. Speak plainly about local visibility and conversion; never promise a ranking or lead count.",
+        ),
+        (
+            &["bad experience", "tried before", "wasted money", "didn't work", "did not work", "scammed"],
+            "They had a bad experience. Ask what went wrong and what would make this different; diagnose before defending yourself.",
+        ),
+        (
+            &["send me", "email me", "send some info", "send information"],
+            "They asked for information. Agree, confirm the one detail that matters most, and lock in a specific follow-up time.",
+        ),
+        (
+            &["not interested", "not right now", "maybe later", "call me later"],
+            "They are not ready. Ask what would need to change for a website to matter, or ask permission for a low-pressure follow-up.",
+        ),
+    ];
+    signals
+        .iter()
+        .find(|(needles, _)| needles.iter().any(|needle| said.contains(needle)))
+        .map(|(_, hint)| *hint)
+}
 
 fn user_prompt(
     prospect: &str,
@@ -96,6 +159,7 @@ fn user_prompt(
     brief: &str,
     summary: &str,
     open_questions: &[String],
+    recent_coach: &[String],
 ) -> String {
     let recent = history
         .iter()
@@ -111,7 +175,7 @@ fn user_prompt(
         summary.to_string()
     };
     let mut open = String::new();
-    for (i, q) in open_questions.iter().enumerate().take(3) {
+    for (i, q) in open_questions.iter().enumerate().take(8) {
         open.push_str(&format!("{}. {q}\n", i + 1));
     }
     let open_block = if open.is_empty() {
@@ -119,13 +183,32 @@ fn user_prompt(
     } else {
         open
     };
+    let coaching_read = if is_sales_mode(brief, open_questions) {
+        objection_hint(prospect).unwrap_or(
+            "No obvious objection. React to their newest line, then choose the highest-value open question.",
+        )
+    } else {
+        "No special objection detected."
+    };
+    let prior = if recent_coach.is_empty() {
+        "(none yet)".to_string()
+    } else {
+        recent_coach
+            .iter()
+            .rev()
+            .take(5)
+            .rev()
+            .map(|line| format!("- {line}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
     format!(
-        "BRIEF:{brief}\nMEMORY (what the whole conversation established so far):\n{memory}\nRECENT LINES:\n{recent}\nTHEY SAID:\n{prospect}\nPLAYBOOK QUESTIONS STILL OPEN:\n{open_block}\n\nSALES GUIDANCE:\nSuggest the next line for the FIRST open playbook question unless the last thing they said needs a response first. Never suggest a question listed as answered or already present in RECENT LINES. If the prospect raises an objection, acknowledge it briefly before asking one clarifying question. Keep the suggested line natural to say aloud and under 20 words. Move toward a concrete next step when pain, value, authority, budget, and timing are sufficiently clear."
+        "BRIEF:\n{brief}\n\nCONVERSATION MEMORY:\n{memory}\n\nRECENT LINES:\n{recent}\n\nTHEY JUST SAID:\n{prospect}\n\nDISCOVERY CHECKLIST STILL OPEN (choose only if it is the best next move):\n{open_block}\n\nCOACHING READ:\n{coaching_read}\n\nYOUR RECENT SUGGESTIONS (do not repeat):\n{prior}\n\nTASK:\nWrite the single best next sentence for the salesperson. If they asked a direct question, answer it first. If they revealed a problem or objection, address that before moving on. Otherwise ask the highest-value open question. Do not mechanically march through the checklist. Use their exact words where useful. Make it sound like a confident human, not a script."
     )
 }
 
 pub async fn warmup(settings: &CoachSettings) {
-    let _ = suggest(settings, "Hello", &[], "", "", &[]).await;
+    let _ = suggest(settings, "Hello", &[], "", "", &[], &[]).await;
 }
 
 const SUMMARY_PROMPT: &str = "Conversation memory keeper for a live sales call. You get the running memory so far plus the newest lines. JSON only: {\"summary\":\"3 sentences max: what the prospect has revealed and agreed so far\"}. Carry forward every concrete fact (numbers, names, timelines, pain points) and drop small talk. Never invent facts.";
@@ -220,9 +303,14 @@ async fn summarize_openai(
     let status = res.status();
     let v: Value = res.json().await?;
     if !status.is_success() {
-        bail!("openai HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+        bail!(
+            "openai HTTP {status}: {}",
+            v["error"]["message"].as_str().unwrap_or("request failed")
+        );
     }
-    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    let content = v["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("{}");
     parse_summary(content)
 }
 
@@ -253,9 +341,14 @@ async fn summarize_openrouter(
     let status = res.status();
     let v: Value = res.json().await?;
     if !status.is_success() {
-        bail!("openrouter HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+        bail!(
+            "openrouter HTTP {status}: {}",
+            v["error"]["message"].as_str().unwrap_or("request failed")
+        );
     }
-    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    let content = v["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("{}");
     parse_summary(content)
 }
 
@@ -278,7 +371,8 @@ async fn summarize_gemini(
     });
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-        settings.gemini_models()[0], settings.google_api_key
+        settings.gemini_models()[0],
+        settings.google_api_key
     );
     let res = http().post(&url).json(&body).send().await?;
     let status = res.status();
@@ -338,9 +432,14 @@ async fn polish_openai(settings: &CoachSettings, text: &str) -> Result<String> {
     let status = res.status();
     let v: Value = res.json().await?;
     if !status.is_success() {
-        bail!("openai HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+        bail!(
+            "openai HTTP {status}: {}",
+            v["error"]["message"].as_str().unwrap_or("request failed")
+        );
     }
-    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    let content = v["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("{}");
     parse_line(content)
 }
 
@@ -372,9 +471,14 @@ async fn polish_openrouter(settings: &CoachSettings, text: &str) -> Result<Strin
     let status = res.status();
     let v: Value = res.json().await?;
     if !status.is_success() {
-        bail!("openrouter HTTP {status}: {}", v["error"]["message"].as_str().unwrap_or("request failed"));
+        bail!(
+            "openrouter HTTP {status}: {}",
+            v["error"]["message"].as_str().unwrap_or("request failed")
+        );
     }
-    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or("{}");
+    let content = v["choices"][0]["message"]["content"]
+        .as_str()
+        .unwrap_or("{}");
     parse_line(content)
 }
 
@@ -390,7 +494,8 @@ async fn polish_gemini(settings: &CoachSettings, text: &str) -> Result<String> {
     });
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-        settings.gemini_models()[0], settings.google_api_key
+        settings.gemini_models()[0],
+        settings.google_api_key
     );
     let res = http().post(&url).json(&body).send().await?;
     let status = res.status();
@@ -556,7 +661,11 @@ async fn recap_openai(settings: &CoachSettings, history: &[String]) -> Result<Re
             v["error"]["message"].as_str().unwrap_or("request failed")
         );
     }
-    parse_recap(v["choices"][0]["message"]["content"].as_str().unwrap_or("{}"))
+    parse_recap(
+        v["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("{}"),
+    )
 }
 
 async fn recap_openrouter(settings: &CoachSettings, history: &[String]) -> Result<RecapOutput> {
@@ -589,7 +698,11 @@ async fn recap_openrouter(settings: &CoachSettings, history: &[String]) -> Resul
             .unwrap_or("request failed");
         bail!("openrouter HTTP {status}: {message}");
     }
-    parse_recap(v["choices"][0]["message"]["content"].as_str().unwrap_or("{}"))
+    parse_recap(
+        v["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap_or("{}"),
+    )
 }
 
 async fn recap_gemini(settings: &CoachSettings, history: &[String]) -> Result<RecapOutput> {
@@ -640,31 +753,70 @@ pub async fn suggest(
     brief: &str,
     summary: &str,
     open_questions: &[String],
+    recent_coach: &[String],
 ) -> Result<CoachReply> {
     match settings.provider.as_str() {
         "openai" => {
-            suggest_openai(settings, prospect, history, brief, summary, open_questions).await
+            suggest_openai(
+                settings,
+                prospect,
+                history,
+                brief,
+                summary,
+                open_questions,
+                recent_coach,
+            )
+            .await
         }
         "openrouter" => {
-            suggest_openrouter(settings, prospect, history, brief, summary, open_questions).await
+            suggest_openrouter(
+                settings,
+                prospect,
+                history,
+                brief,
+                summary,
+                open_questions,
+                recent_coach,
+            )
+            .await
         }
-        _ => suggest_gemini(settings, prospect, history, brief, summary, open_questions).await,
+        _ => {
+            suggest_gemini(
+                settings,
+                prospect,
+                history,
+                brief,
+                summary,
+                open_questions,
+                recent_coach,
+            )
+            .await
+        }
     }
 }
 
 async fn suggest_openai(
     settings: &CoachSettings,
     prospect: &str,
-    history: &[String], brief: &str, summary: &str, open_questions: &[String],
+    history: &[String],
+    brief: &str,
+    summary: &str,
+    open_questions: &[String],
+    recent_coach: &[String],
 ) -> Result<CoachReply> {
+    let system = if is_sales_mode(brief, open_questions) {
+        SALES_SYSTEM_PROMPT
+    } else {
+        GENERAL_SYSTEM_PROMPT
+    };
     let body = json!({
         "model": settings.openai_model(),
         "temperature": 0.2,
-        "max_tokens": 90,
+        "max_tokens": 140,
         "response_format": { "type": "json_object" },
         "messages": [
-            { "role": "system", "content": SYSTEM_PROMPT },
-            { "role": "user", "content": user_prompt(prospect, history, brief, summary, open_questions) }
+            { "role": "system", "content": system },
+            { "role": "user", "content": user_prompt(prospect, history, brief, summary, open_questions, recent_coach) }
         ]
     });
     let res = http()
@@ -690,8 +842,17 @@ async fn suggest_openai(
 async fn suggest_openrouter(
     settings: &CoachSettings,
     prospect: &str,
-    history: &[String], brief: &str, summary: &str, open_questions: &[String],
+    history: &[String],
+    brief: &str,
+    summary: &str,
+    open_questions: &[String],
+    recent_coach: &[String],
 ) -> Result<CoachReply> {
+    let system = if is_sales_mode(brief, open_questions) {
+        SALES_SYSTEM_PROMPT
+    } else {
+        GENERAL_SYSTEM_PROMPT
+    };
     let model = settings.openrouter_model()?;
     let mut body = json!({
         "model": model,
@@ -699,8 +860,8 @@ async fn suggest_openrouter(
         "max_tokens": 800,
         "response_format": { "type": "json_object" },
         "messages": [
-            { "role": "system", "content": SYSTEM_PROMPT },
-            { "role": "user", "content": user_prompt(prospect, history, brief, summary, open_questions) }
+            { "role": "system", "content": system },
+            { "role": "user", "content": user_prompt(prospect, history, brief, summary, open_questions, recent_coach) }
         ]
     });
     if model.contains("gpt-6") {
@@ -734,9 +895,28 @@ async fn suggest_openrouter(
 async fn suggest_gemini(
     settings: &CoachSettings,
     prospect: &str,
-    history: &[String], brief: &str, summary: &str, open_questions: &[String],
+    history: &[String],
+    brief: &str,
+    summary: &str,
+    open_questions: &[String],
+    recent_coach: &[String],
 ) -> Result<CoachReply> {
-    let prompt = format!("{SYSTEM_PROMPT}\n\n{}", user_prompt(prospect, history, brief, summary, open_questions));
+    let system = if is_sales_mode(brief, open_questions) {
+        SALES_SYSTEM_PROMPT
+    } else {
+        GENERAL_SYSTEM_PROMPT
+    };
+    let prompt = format!(
+        "{system}\n\n{}",
+        user_prompt(
+            prospect,
+            history,
+            brief,
+            summary,
+            open_questions,
+            recent_coach
+        )
+    );
     let body = json!({
         "contents": [{ "role": "user", "parts": [{ "text": prompt }] }],
         "generationConfig": {
@@ -799,14 +979,34 @@ fn parse_reply(raw: &str, prospect: &str) -> Result<CoachReply> {
         .trim()
         .to_string();
     if answer.is_empty() {
-        answer = "What is the main thing you want more of from marketing right now?".into();
+        answer = "What is the biggest thing you want to improve right now?".into();
     }
     if answer.len() > 320 {
         answer = answer.chars().take(280).collect();
     }
-    let allowed = ["Discovery", "Impact", "Offer", "Objection", "Next step", "Hold"];
-    let raw_tag = parsed.get("tag").and_then(|x| x.as_str()).unwrap_or("Discovery").trim();
-    let tag = allowed.iter().find(|item| item.eq_ignore_ascii_case(raw_tag)).copied().unwrap_or("Discovery").to_string();
+    let allowed = [
+        "Rapport",
+        "Discovery",
+        "Pain",
+        "Impact",
+        "Vision",
+        "Offer",
+        "Objection",
+        "Close",
+        "Next step",
+        "Hold",
+    ];
+    let raw_tag = parsed
+        .get("tag")
+        .and_then(|x| x.as_str())
+        .unwrap_or("Discovery")
+        .trim();
+    let tag = allowed
+        .iter()
+        .find(|item| item.eq_ignore_ascii_case(raw_tag))
+        .copied()
+        .unwrap_or("Discovery")
+        .to_string();
     Ok(CoachReply {
         question: if question.is_empty() {
             prospect.to_string()
@@ -826,17 +1026,67 @@ fn parse_reply(raw: &str, prospect: &str) -> Result<CoachReply> {
 
 #[cfg(test)]
 mod model_tests {
-    use super::CoachSettings;
+    use super::{is_sales_mode, objection_hint, user_prompt, CoachSettings};
     fn settings(model: &str) -> CoachSettings {
-        CoachSettings { provider: "openrouter".into(), google_api_key: String::new(), google_model: String::new(), openai_key: String::new(), openai_model: String::new(), openrouter_key: "example-key".into(), openrouter_model: model.into() }
+        CoachSettings {
+            provider: "openrouter".into(),
+            google_api_key: String::new(),
+            google_model: String::new(),
+            openai_key: String::new(),
+            openai_model: String::new(),
+            openrouter_key: "example-key".into(),
+            openrouter_model: model.into(),
+        }
     }
     #[test]
     fn manual_model_ids_are_not_replaced_by_presets() {
-        assert_eq!(settings(" vendor/custom-model:free ").openrouter_model().unwrap(), "vendor/custom-model:free");
-        assert_eq!(settings("gpt-6-luna").openrouter_model().unwrap(), "gpt-6-luna");
+        assert_eq!(
+            settings(" vendor/custom-model:free ")
+                .openrouter_model()
+                .unwrap(),
+            "vendor/custom-model:free"
+        );
+        assert_eq!(
+            settings("gpt-6-luna").openrouter_model().unwrap(),
+            "gpt-6-luna"
+        );
     }
     #[test]
     fn blank_model_requires_user_input() {
         assert!(settings(" ").openrouter_model().is_err());
+    }
+
+    #[test]
+    fn sales_mode_survives_after_the_checklist_is_finished() {
+        assert!(is_sales_mode("Call type: Plumbing sales call", &[]));
+        assert!(!is_sales_mode("Call type: General meeting", &[]));
+    }
+
+    #[test]
+    fn flags_common_plumber_objections_without_misfiring_on_busy_work() {
+        assert!(objection_hint("I already have a website, but it does not bring calls")
+            .unwrap()
+            .contains("existing site"));
+        assert!(objection_hint("That sounds too expensive for me")
+            .unwrap()
+            .contains("Price or budget"));
+        assert!(objection_hint("I have too much work already")
+            .unwrap()
+            .contains("do not need more volume"));
+    }
+
+    #[test]
+    fn prompt_includes_objection_read_and_prior_suggestions() {
+        let prompt = user_prompt(
+            "I already have a website and it does not bring calls",
+            &[],
+            "Call type: Plumbing sales call",
+            "",
+            &["What is bringing you most of your jobs right now?".into()],
+            &["Would it be worth reviewing the site together?".into()],
+        );
+        assert!(prompt.contains("Ask whether it brings in calls"));
+        assert!(prompt.contains("Would it be worth reviewing the site together?"));
+        assert!(prompt.contains("DISCOVERY CHECKLIST STILL OPEN"));
     }
 }

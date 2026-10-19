@@ -1,12 +1,80 @@
 {
-  "name": "Freelance Marketing Sales Coach",
-  "offer": "Help local businesses get more qualified leads and turn them into customers through practical marketing improvements",
+  "name": "Plumber Website Sales Coach",
+  "offer": "A fast, mobile-first website built to turn local searches into calls and booked plumbing jobs, with clear service pages, trust signals, and a simple quote request path.",
+  "goal": "Diagnose why the plumber is not getting enough of the right calls, connect that problem to the website, and secure one specific next step such as a short website review or a tailored proposal.",
+  "buyer": "Plumbing owner-operator or the person who handles the office and phone.",
   "discovery": [
-    "What is your main source of new customers today?",
-    "What would you like marketing to do better over the next 90 days?",
-    "How many enquiries or leads do you get in a typical month?",
-    "What happens after someone fills out a form or calls?",
-    "What have you already tried, and what did it cost?",
-    "Who makes the final decision and what is the timing?"
+    "What is bringing you most of your jobs right now?",
+    "When someone searches for a plumber in your area, what do they find?",
+    "How many calls or booked jobs does your website bring in a typical month?",
+    "What happens when someone calls after hours or while your team is on a job?",
+    "Which jobs are most profitable for you, and which do you want more of?",
+    "What have you tried before to get more calls, and what happened?",
+    "Who else would be involved in a decision like this?",
+    "If the website brought more of the right jobs, what would that be worth to you?"
+  ],
+  "pain_hypotheses": [
+    "Word of mouth and referrals leave the pipeline uneven.",
+    "They get price shoppers or low-value jobs instead of the work they want.",
+    "The current site is slow or awkward to use on a phone.",
+    "Calls are missed after hours or while the team is on site.",
+    "The business looks less established than nearby competitors.",
+    "There is no obvious way to request a quote or book a job."
+  ],
+  "value_angles": [
+    "More calls from people already searching for a plumber nearby.",
+    "Better-qualified jobs, not just more traffic.",
+    "A site that makes a small team look established and trustworthy.",
+    "Mobile-first service pages with a clear call or quote action.",
+    "Solid local SEO foundations without promising rankings.",
+    "Less time spent answering the same basic questions on the phone."
+  ],
+  "objections": [
+    {
+      "when": "they already have a website",
+      "move": "Ask whether it brings in calls and when it was last updated. Do not attack the current site."
+    },
+    {
+      "when": "they get enough work from word of mouth",
+      "move": "Ask about slow periods, after-hours calls, and the high-value jobs they would like more of."
+    },
+    {
+      "when": "price, budget, or cost comes up",
+      "move": "Do not guess a number. Ask which jobs or outcomes matter most, then explain the next step is a scoped proposal."
+    },
+    {
+      "when": "they say they are too busy",
+      "move": "Focus on a done-for-you process and the small amount of owner time needed. Do not add pressure."
+    },
+    {
+      "when": "a friend, nephew, or another agency built the current site",
+      "move": "Respect the existing work. Ask what happens when it needs updates, tracking, or ongoing improvements."
+    },
+    {
+      "when": "they say they do not need more work",
+      "move": "Shift from more leads to better jobs, stronger trust, and fewer time-wasting enquiries."
+    },
+    {
+      "when": "they mention Google, SEO, or rankings",
+      "move": "Speak plainly about local visibility and conversion. Never promise a ranking or a lead count."
+    },
+    {
+      "when": "they had a bad experience before",
+      "move": "Ask what went wrong and what would make this different. Diagnose before defending yourself."
+    },
+    {
+      "when": "they ask you to send information",
+      "move": "Agree, confirm the one detail that matters most, and lock in a specific follow-up time."
+    },
+    {
+      "when": "they say they are not interested",
+      "move": "Ask what would need to change for a website to matter, or ask permission for a low-pressure follow-up."
+    }
+  ],
+  "close": [
+    "Ask for a short 15-minute website review.",
+    "Offer to send a tailored plan with scope and price after one final detail.",
+    "If timing is the issue, agree a specific follow-up date.",
+    "Ask who else should review the plan before a decision."
   ]
 }

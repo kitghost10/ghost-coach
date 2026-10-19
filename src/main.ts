@@ -367,14 +367,29 @@ function render() {
 type Playbook = {
   name: string;
   offer: string;
+  goal: string;
+  buyer: string;
   discovery: string[];
+  pain_hypotheses: string[];
+  value_angles: string[];
+  objections: Array<{ when: string; move: string }>;
+  close: string[];
 };
 
 const playbook = plumbingPlaybook as Playbook;
 const PLUMBING_BRIEF = [
   `Playbook: ${playbook.name}`,
   `Offer: ${playbook.offer}`,
-  `Discovery questions to work through (one at a time, skip any already answered): ${playbook.discovery.join(" | ")}`,
+  `Call goal: ${playbook.goal}`,
+  `Buyer: ${playbook.buyer}`,
+  "Discovery checklist (a map, not a script; ask one at a time and skip anything already answered):",
+  ...playbook.discovery.map((question, index) => `${index + 1}. ${question}`),
+  `Pain signals: ${playbook.pain_hypotheses.join(" | ")}`,
+  `Value angles: ${playbook.value_angles.join(" | ")}`,
+  "Objection moves:",
+  ...playbook.objections.map((item) => `- If ${item.when}: ${item.move}`),
+  "Closing moves:",
+  ...playbook.close.map((move) => `- ${move}`),
 ].join("\n");
 
 function prospectBrief() {
@@ -399,10 +414,10 @@ function briefForCoach() {
       `Meeting topic: ${brief.topic}`,
     brief.notes && `Context: ${brief.notes}`,
     isPlumbing
-      ? "Suggest the next line from the playbook: work through discovery first, then present the offer, handle objections, and close on a concrete next step."
+      ? "Sales mode: act like a top website consultant for plumbers. Diagnose before pitching. Respond to the newest line before asking another question. Tie the website to missed calls, better jobs, trust, or saved time. Never invent prices, rankings, results, or guarantees. When the prospect is ready, ask for one specific next step."
       : "This is a general (non-sales) meeting. Coach only if the caller asks; otherwise help with clarity, note-taking, and follow-ups.",
   ].filter(Boolean);
-  return parts.join(" | ");
+  return parts.join("\n");
 }
 
 function syncMeetingTopicField() {

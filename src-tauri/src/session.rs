@@ -23,7 +23,11 @@ pub fn set_auto_answer(engine: State<Engine>, enabled: bool) -> Result<(), Strin
 }
 
 #[tauri::command]
-pub async fn polish_line(app: AppHandle, engine: State<'_, Engine>, text: String) -> Result<String, String> {
+pub async fn polish_line(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+    text: String,
+) -> Result<String, String> {
     let intent = text.trim().to_string();
     if intent.is_empty() {
         return Err("Type what you want to say first.".into());
@@ -71,8 +75,29 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
     let said = engine.last_prospect.lock().unwrap().clone();
     let hist = engine.history.lock().unwrap().clone();
     let brief = engine.brief.lock().unwrap().clone();
-    let summary = engine.rolling_summary.lock().map(|s| s.clone()).unwrap_or_default();
-    let open_questions = engine.questions.lock().map(|t| t.remaining()).unwrap_or_default();
+    let summary = engine
+        .rolling_summary
+        .lock()
+        .map(|s| s.clone())
+        .unwrap_or_default();
+    let open_questions = engine
+        .questions
+        .lock()
+        .map(|t| t.remaining())
+        .unwrap_or_default();
+    let recent_coach = engine
+        .transcript
+        .lock()
+        .map(|lines| {
+            lines
+                .iter()
+                .rev()
+                .filter(|entry| entry.role == "coach")
+                .take(5)
+                .map(|entry| entry.text.clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     if said.trim().is_empty() {
         let _ = app.emit(
             "coach",
@@ -89,11 +114,25 @@ pub fn generate_answer(app: AppHandle, engine: State<Engine>) -> Result<(), Stri
     let log = engine.transcript.clone();
     let log_sink = engine.sink.lock().unwrap().clone();
     tauri::async_runtime::spawn(async move {
-        match coach::suggest(&settings, &said, &hist, &brief, &summary, &open_questions).await {
+        match coach::suggest(
+            &settings,
+            &said,
+            &hist,
+            &brief,
+            &summary,
+            &open_questions,
+            &recent_coach,
+        )
+        .await
+        {
             Ok(reply) => {
                 if !reply.answer.is_empty() {
                     let mut lines = log.lock().unwrap();
-                    lines.push(record::Entry::new("coach", reply.answer.clone(), &reply.tag));
+                    lines.push(record::Entry::new(
+                        "coach",
+                        reply.answer.clone(),
+                        &reply.tag,
+                    ));
                     if let Some(sink) = &log_sink {
                         sink.flush(&lines);
                     }
@@ -141,7 +180,10 @@ pub async fn start_listening(
     if deepgram_key.trim().is_empty() {
         return Err("Paste a Deepgram API key first.".into());
     }
-    if ai_provider.eq_ignore_ascii_case("openrouter") && !openrouter_key.trim().is_empty() && openrouter_model.trim().is_empty() {
+    if ai_provider.eq_ignore_ascii_case("openrouter")
+        && !openrouter_key.trim().is_empty()
+        && openrouter_model.trim().is_empty()
+    {
         return Err("Enter an OpenRouter model ID in Connections.".into());
     }
     if !engine.stop.load(Ordering::Relaxed) {
@@ -158,9 +200,15 @@ pub async fn start_listening(
     let you_talking = engine.you_talking.clone();
     let handle = app.clone();
     let saved = crate::config::load_config(app.clone()).ok();
-    let dg = nonempty(deepgram_key, saved.as_ref().map(|s| s.deepgram_key.as_str()));
+    let dg = nonempty(
+        deepgram_key,
+        saved.as_ref().map(|s| s.deepgram_key.as_str()),
+    );
     let openai_key = nonempty(openai_key, saved.as_ref().map(|s| s.openai_key.as_str()));
-    let openai_model = nonempty(openai_model, saved.as_ref().map(|s| s.openai_model.as_str()));
+    let openai_model = nonempty(
+        openai_model,
+        saved.as_ref().map(|s| s.openai_model.as_str()),
+    );
     let google_api_key = nonempty(
         google_api_key,
         saved.as_ref().map(|s| s.google_api_key.as_str()),
@@ -233,7 +281,10 @@ pub async fn start_listening(
         .await;
         let still_current = session_gen.load(Ordering::Relaxed) == gen;
         if still_current {
-            start_meter_preview(handle.clone(), handle.state::<Engine>().preview_stop.clone());
+            start_meter_preview(
+                handle.clone(),
+                handle.state::<Engine>().preview_stop.clone(),
+            );
             handle.state::<Engine>().stop.store(true, Ordering::Relaxed);
             match result {
                 Err(err) => {
@@ -368,14 +419,8 @@ async fn run_session(
         "you",
         false,
     );
-    let transcribe_them = spawn_labeled_transcriber(
-        deepgram_key,
-        them_dg_rx,
-        ev_tx,
-        stop.clone(),
-        "them",
-        true,
-    );
+    let transcribe_them =
+        spawn_labeled_transcriber(deepgram_key, them_dg_rx, ev_tx, stop.clone(), "them", true);
 
     let _ = app.emit(
         "status",
@@ -671,7 +716,12 @@ fn nonempty(passed: String, saved: Option<&str>) -> String {
 
 /// After a successful session, wait for the recorder to finish flushing and
 /// write an AI post-call brief for the newest call.
-fn spawn_auto_recap(app: AppHandle, coach_cfg: CoachSettings, gen: u64, session_gen: Arc<AtomicU64>) {
+fn spawn_auto_recap(
+    app: AppHandle,
+    coach_cfg: CoachSettings,
+    gen: u64,
+    session_gen: Arc<AtomicU64>,
+) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(1200)).await;
         if session_gen.load(Ordering::Relaxed) != gen {
@@ -701,7 +751,11 @@ fn spawn_auto_recap(app: AppHandle, coach_cfg: CoachSettings, gen: u64, session_
             .iter()
             .filter(|entry| entry.role != "coach")
             .map(|entry| {
-                let who = if entry.role == "you" { "You" } else { "Prospect" };
+                let who = if entry.role == "you" {
+                    "You"
+                } else {
+                    "Prospect"
+                };
                 format!("{who}: {}", entry.text)
             })
             .collect();
@@ -718,7 +772,9 @@ fn spawn_auto_recap(app: AppHandle, coach_cfg: CoachSettings, gen: u64, session_
                 live: false,
             },
         );
-        let saved_user_note = record::load_brief(&dir).map(|b| b.user_note).unwrap_or_default();
+        let saved_user_note = record::load_brief(&dir)
+            .map(|b| b.user_note)
+            .unwrap_or_default();
         let brief = match coach::recap(&coach_cfg, &history).await {
             Ok(out) => record::PostCallBrief {
                 about: out.about,
@@ -810,9 +866,18 @@ fn request_coach(
         .lock()
         .map(|s| s.clone())
         .unwrap_or_default();
-    let open_questions = questions
+    let open_questions = questions.lock().map(|t| t.remaining()).unwrap_or_default();
+    let recent_coach = transcript
         .lock()
-        .map(|t| t.remaining())
+        .map(|lines| {
+            lines
+                .iter()
+                .rev()
+                .filter(|entry| entry.role == "coach")
+                .take(5)
+                .map(|entry| entry.text.clone())
+                .collect::<Vec<_>>()
+        })
         .unwrap_or_default();
     let app_c = app.clone();
     let log = transcript.clone();
@@ -821,7 +886,17 @@ fn request_coach(
     let req_id = coach_tick.fetch_add(1, Ordering::Relaxed) + 1;
     let coach_tick_c = coach_tick.clone();
     tauri::async_runtime::spawn(async move {
-        match coach::suggest(&settings, &prompt, &hist, &brief, &summary, &open_questions).await {
+        match coach::suggest(
+            &settings,
+            &prompt,
+            &hist,
+            &brief,
+            &summary,
+            &open_questions,
+            &recent_coach,
+        )
+        .await
+        {
             Ok(reply) if !reply.answer.is_empty() => {
                 if coach_tick_c.load(Ordering::Relaxed) != req_id {
                     return;
