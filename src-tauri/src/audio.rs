@@ -78,7 +78,11 @@ fn capture_loop(
     let mut resampler = StreamResampler::new(sample_hz, TARGET_HZ);
     let mut pcm_acc: Vec<f32> = Vec::new();
     let mut last_level = Instant::now();
-    let first_channel_only = true;
+    let mut auto_gain = AutoGain::default();
+    // Quiet laptop and headset microphones often produce usable speech far below
+    // Deepgram's comfortable input level. Mix the channels and normalize the
+    // microphone before it reaches either the transcriber or the recording.
+    let first_channel_only = false;
 
     let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
@@ -96,6 +100,7 @@ fn capture_loop(
                     &mut last_level,
                     &pcm_tx,
                     &level_tx,
+                    Some(&mut auto_gain),
                 );
             },
             err_fn,
@@ -115,6 +120,7 @@ fn capture_loop(
                     &mut last_level,
                     &pcm_tx,
                     &level_tx,
+                    Some(&mut auto_gain),
                 );
             },
             err_fn,
@@ -199,6 +205,7 @@ fn capture_linux_monitor(
             &mut last_level,
             &pcm_tx,
             &level_tx,
+            None,
         );
     }
 
@@ -306,6 +313,7 @@ fn capture_windows_loopback(
             &mut last_level,
             &pcm_tx,
             &level_tx,
+            None,
         );
     }
     let _ = client.stop_stream();
@@ -356,6 +364,7 @@ fn process_samples(
     last_level: &mut Instant,
     pcm_tx: &Option<Sender<Vec<u8>>>,
     level_tx: &SyncSender<(Ear, f32)>,
+    mut auto_gain: Option<&mut AutoGain>,
 ) {
     if samples.is_empty() {
         return;
@@ -369,6 +378,10 @@ fn process_samples(
             frame.iter().sum::<f32>() / channels as f32
         };
         mono.push(value.clamp(-1.0, 1.0));
+    }
+
+    if let Some(agc) = auto_gain.as_mut() {
+        agc.apply(&mut mono);
     }
 
     if last_level.elapsed() >= Duration::from_millis(80) {
@@ -396,6 +409,49 @@ fn rms(samples: &[f32]) -> f32 {
     }
     let sum: f32 = samples.iter().map(|s| s * s).sum();
     (sum / samples.len() as f32).sqrt().clamp(0.0, 1.0)
+}
+
+/// Level-normalizes a quiet microphone without letting loud speech clip.
+/// The gain attacks quickly when speech arrives and releases slowly so pauses
+/// do not pump the background noise up and down.
+#[derive(Default)]
+struct AutoGain {
+    envelope: f32,
+    gain: f32,
+}
+
+impl AutoGain {
+    const NOISE_FLOOR: f32 = 0.005;
+    const TARGET_RMS: f32 = 0.1;
+    const MAX_GAIN: f32 = 12.0;
+
+    fn apply(&mut self, samples: &mut [f32]) {
+        if samples.is_empty() {
+            return;
+        }
+        if self.gain <= 0.0 {
+            self.gain = 1.0;
+        }
+
+        let level = rms(samples);
+        if level > self.envelope {
+            self.envelope = self.envelope * 0.5 + level * 0.5;
+        } else {
+            self.envelope = self.envelope * 0.995 + level * 0.005;
+        }
+
+        let desired = if level >= Self::NOISE_FLOOR && self.envelope > 0.0 {
+            (Self::TARGET_RMS / self.envelope).clamp(1.0, Self::MAX_GAIN)
+        } else {
+            self.gain
+        };
+        let blend = if desired < self.gain { 0.25 } else { 0.08 };
+        self.gain += (desired - self.gain) * blend;
+
+        for sample in samples.iter_mut() {
+            *sample = (*sample * self.gain).clamp(-1.0, 1.0);
+        }
+    }
 }
 
 struct StreamResampler {
@@ -461,7 +517,7 @@ fn f32_to_pcm16(input: &[f32]) -> Vec<u8> {
 
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
-    use super::select_linux_monitor;
+    use super::{select_linux_monitor, AutoGain};
 
     #[test]
     fn selects_monitor_for_default_sink() {
@@ -487,5 +543,28 @@ mod tests {
     fn does_not_use_a_microphone_as_system_audio() {
         let sources = "1 alsa_input.mic module-alsa-card.c s16le 2ch 48000Hz RUNNING";
         assert_eq!(select_linux_monitor("missing_sink", sources), None);
+    }
+
+    #[test]
+    fn auto_gain_lifts_quiet_microphone_speech() {
+        let mut agc = AutoGain::default();
+        let mut last_peak = 0.0f32;
+        for _ in 0..20 {
+            let mut chunk: Vec<f32> = (0..480)
+                .map(|i| (i as f32 * 0.15).sin() * 0.02)
+                .collect();
+            agc.apply(&mut chunk);
+            last_peak = chunk.iter().fold(0.0f32, |peak, s| peak.max(s.abs()));
+        }
+        assert!(last_peak > 0.08, "quiet speech stayed at {last_peak}");
+        assert!(last_peak <= 1.0, "auto gain clipped at {last_peak}");
+    }
+
+    #[test]
+    fn auto_gain_leaves_silence_silent() {
+        let mut agc = AutoGain::default();
+        let mut chunk = vec![0.0f32; 480];
+        agc.apply(&mut chunk);
+        assert!(chunk.iter().all(|sample| *sample == 0.0));
     }
 }
